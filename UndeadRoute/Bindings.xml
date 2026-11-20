@@ -1,0 +1,11 @@
+<Bindings>
+    <Binding name="UNDEADROUTE_TOGGLE" header="UNDEADROUTE" category="ADDONS">
+        UndeadRoute_Key("toggle")
+    </Binding>
+    <Binding name="UNDEADROUTE_TRACKER" category="ADDONS">
+        UndeadRoute_Key("tracker")
+    </Binding>
+    <Binding name="UNDEADROUTE_PIN" category="ADDONS">
+        UndeadRoute_Key("pin")
+    </Binding>
+</Bindings>

@@ -1,0 +1,5 @@
+tools/node_modules/
+tools/out.txt
+.playwright-mcp/
+# The tests' copy of the quest lists, built by tools/gen.lua from other addons' data: never shipped or shared.
+Generated.lua

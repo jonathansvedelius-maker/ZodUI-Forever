@@ -1,0 +1,77 @@
+## Interface: 16001
+## Title: |cffffd100Zod|rUI
+## Notes: A companion suite for WoW Forever: session and XP stats, loot log, loot rolls, gold ledger, characters, reputation, vendor, info bar, tooltips, chat, alerts and a to-do list. Type /zod.
+## Author: Jonathan
+## Version: 0.64.0
+## OptionalDeps: UndeadRoute, ForeverLevelingBiS, ForeverDungeonJournal, CodexForever
+## SavedVariables: ZodUIDB
+## SavedVariablesPerCharacter: ZodUICharDB
+## IconTexture: Interface\AddOns\ZodUI\Media\Logo
+## AddonCompartmentFunc: ZodUI_OnCompartmentClick
+## X-Preview-Start: /zod
+
+Core\Init.lua
+Core\Theme.lua
+Core\Codex.lua
+Core\Window.lua
+Core\Commands.lua
+Core\Ads.lua
+Core\Movers.lua
+Core\Toast.lua
+Core\Share.lua
+Core\Setup.lua
+Core\Minimap.lua
+Core\API.lua
+Core\Bus.lua
+Core\Perf.lua
+
+Modules\Session.lua
+Modules\History.lua
+Modules\Loot.lua
+Modules\Rolls.lua
+Modules\Runs.lua
+Modules\Gold.lua
+Modules\Alts.lua
+Modules\Items.lua
+Modules\Notes.lua
+Modules\Goals.lua
+Modules\Remind.lua
+Modules\Vendor.lua
+Modules\DataBar.lua
+Modules\Tooltip.lua
+Modules\Chat.lua
+Modules\Board.lua
+Modules\Groups.lua
+Modules\Alerts.lua
+Modules\Reputation.lua
+Modules\Social.lua
+Modules\Away.lua
+Modules\Mail.lua
+Modules\Kills.lua
+Modules\Deaths.lua
+Modules\Zones.lua
+Modules\Story.lua
+Modules\Coach.lua
+Modules\Raids.lua
+Modules\QuestLog.lua
+Modules\QuestItems.lua
+Modules\Recap.lua
+Modules\Handouts.lua
+Modules\Milestones.lua
+Modules\Leaderboard.lua
+Modules\Prep.lua
+Modules\Travel.lua
+Modules\LootRules.lua
+Modules\Healer.lua
+Modules\Listings.lua
+Modules\GuideData.lua
+Modules\Guide.lua
+Modules\Breaks.lua
+Modules\Skills.lua
+Modules\Screenshots.lua
+Modules\Pet.lua
+Modules\Loans.lua
+Modules\Guild.lua
+Modules\Shout.lua
+Modules\Crafters.lua
+Modules\Tweaks.lua

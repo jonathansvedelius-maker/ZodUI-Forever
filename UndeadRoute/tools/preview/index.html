@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Undead Route – förhandsvisning</title>
+<style>
+@font-face { font-family: "WowFont"; src: url("/fonts/FRIZQT__.ttf"), local("Palatino Linotype"), local("Georgia"); }
+:root {
+    --panel: #17181c; --panel-2: #1f2127; --line: #2c2f37; --ink: #e7e8ec; --muted: #9a9ca6;
+    --accent: #ffd100; --bad: #ff6b6b; --good: #59d973;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { display: flex; background: #0c0d10; color: var(--ink); font: 13px/1.45 system-ui, "Segoe UI", sans-serif; overflow: hidden; }
+
+/* The game screen. Like UIParent it is always 768 units tall and scales with the height. */
+#screen { position: relative; flex: 1; min-width: 0; overflow: hidden;
+    background:
+        radial-gradient(120% 80% at 50% 110%, #2c3a2b 0%, transparent 60%),
+        radial-gradient(90% 70% at 20% 0%, #2a3340 0%, transparent 65%),
+        linear-gradient(#1a2028, #141a16); }
+#ui { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
+#ui div { position: absolute; pointer-events: none; }
+#ui .ScrollFrame { overflow: hidden; }
+#ui .Button { cursor: pointer; }
+#ui .EditBox input { width: 100%; height: 100%; box-sizing: border-box; padding: 0; border: 0; outline: 0; background: transparent;
+    color: #fff; font: 12px "WowFont", serif; }
+#ui .FontString, #measure { font-family: "WowFont", serif; text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9); }
+#ui .tick svg { width: 100%; height: 100%; display: block; }
+#ui .unknown { outline: 1px dashed #a55; }
+#measure { position: absolute; left: -9999px; top: 0; visibility: hidden; }
+#alerts { position: absolute; left: 0; right: 0; top: 16%; display: flex; flex-direction: column; align-items: center;
+    gap: 4px; pointer-events: none; z-index: 5; }
+#alerts div { font: 16px/22px "WowFont", serif; color: var(--accent); text-shadow: 1px 1px 0 #000, 0 0 6px #000;
+    max-width: 80%; text-align: center; animation: fade 6s forwards; }
+@keyframes fade { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
+#tooltip { position: fixed; display: none; padding: 6px 9px; background: rgba(8, 8, 12, 0.95); border: 1px solid #666;
+    border-radius: 4px; font-size: 12px; color: var(--ink); pointer-events: none; z-index: 10; max-width: 260px; }
+
+/* The control panel. */
+#panel { width: 340px; flex: none; display: flex; flex-direction: column; background: var(--panel);
+    border-left: 1px solid var(--line); }
+#panel header { padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
+#panel h1 { margin: 0; font-size: 15px; font-weight: 600; }
+#panel header p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+#controls { padding: 10px 14px 12px; overflow-y: auto; flex: none; max-height: 62%; }
+fieldset { border: 0; margin: 0 0 12px; padding: 0; }
+legend { padding: 0; margin-bottom: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted); }
+.row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.row label { width: 46px; flex: none; color: var(--muted); }
+.row output { width: 26px; text-align: right; font-variant-numeric: tabular-nums; }
+select, input[type=text], button { font: inherit; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 5px; padding: 5px 8px; min-width: 0; }
+select, input[type=text] { flex: 1; }
+input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+button { cursor: pointer; }
+button:hover { border-color: #555a66; background: #262931; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.status { margin: 0 0 4px; padding: 6px 8px; background: var(--panel-2); border-radius: 5px; font-size: 12px;
+    overflow-wrap: anywhere; }
+.status b { color: var(--accent); font-weight: 600; }
+.hint { margin: 0; color: var(--muted); font-size: 12px; }
+kbd { padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; background: var(--panel-2); font: inherit; }
+#chatHead { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px 6px;
+    border-top: 1px solid var(--line); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted); }
+#chatHead button { padding: 2px 8px; font-size: 11px; text-transform: none; letter-spacing: 0; }
+#chat { flex: 1; min-height: 80px; overflow-y: auto; padding: 0 14px 12px; font-size: 12px; overflow-wrap: anywhere; }
+#chat p { margin: 0 0 5px; }
+#chat .alert { color: var(--accent); font-weight: 600; }
+#chat .note { color: var(--muted); font-style: italic; }
+#chat .fail { color: var(--bad); white-space: pre-wrap; font-family: ui-monospace, Consolas, monospace; }
+
+@media (max-width: 820px) {
+    body { flex-direction: column; overflow: auto; }
+    #screen { flex: none; height: 62vh; }
+    #panel { width: auto; border-left: 0; border-top: 1px solid var(--line); }
+    #controls { max-height: none; }
+    #chat { max-height: 40vh; }
+}
+</style>
+</head>
+<body>
+<div id="screen">
+    <div id="ui"></div>
+    <div id="alerts"></div>
+</div>
+<div id="measure"></div>
+<div id="tooltip"></div>
+
+<aside id="panel">
+    <header>
+        <h1 id="title">Undead Route</h1>
+        <p>Addonets egen kod, ritad i webbläsaren. Ändra en Lua-fil och tryck F5.</p>
+    </header>
+    <div id="controls">
+        <fieldset>
+            <legend>Karaktär</legend>
+            <div class="row"><label for="level">Level</label><input id="level" type="range" min="1" max="60">
+                <output id="levelOut"></output><button id="levelUp" title="Gå upp en level">+1</button></div>
+            <div class="row"><label for="zone">Zon</label><select id="zone"></select></div>
+            <div class="row"><label for="class">Klass</label><select id="class">
+                <option value="PALADIN">Paladin</option><option value="WARRIOR">Warrior</option>
+                <option value="HUNTER">Hunter</option><option value="ROGUE">Rogue</option>
+                <option value="PRIEST">Priest</option><option value="SHAMAN">Shaman</option>
+                <option value="MAGE">Mage</option><option value="WARLOCK">Warlock</option>
+                <option value="DRUID">Druid</option></select></div>
+            <div class="row"><label for="race">Ras</label><select id="race">
+                <optgroup label="Horde"><option value="Scourge">Undead</option><option value="Orc">Orc</option>
+                <option value="Tauren">Tauren</option><option value="Troll">Troll</option>
+                <option value="WindshaperSkyborne">Windshaper Skyborne</option></optgroup>
+                <optgroup label="Alliance"><option value="Human">Human</option><option value="Dwarf">Dwarf</option>
+                <option value="NightElf">Night Elf</option><option value="Gnome">Gnome</option>
+                <option value="HighOrderSkyborne">High Order Skyborne</option></optgroup></select></div>
+            <p class="hint">Klass och ras laddar om addonet, som en ny inloggning.</p>
+        </fieldset>
+        <fieldset>
+            <legend>Kommandon</legend>
+            <div class="row"><input id="slash" type="text" value="/route" aria-label="Slash-kommando" spellcheck="false">
+                <button id="run">Kör</button></div>
+            <div class="chips">
+                <button data-slash="/route">/route</button>
+                <button data-slash="/route dungeons">dungeons</button>
+                <button data-slash="/route tracker">tracker</button>
+                <button data-slash="/route arrow">arrow</button>
+                <button data-slash="/route help">help</button>
+                <button data-slash="/route reset">reset</button>
+                <button data-event="TRAINER_CLOSED" title="Skickar TRAINER_CLOSED">Stäng tränaren</button>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend>Pil och kartnål</legend>
+            <p class="status"><b>TomTom-pil:</b> <span id="arrow">ingen</span></p>
+            <p class="status"><b>Senaste nål:</b> <span id="pin">ingen</span></p>
+        </fieldset>
+        <fieldset>
+            <legend>Quest-läge</legend>
+            <p class="hint"><kbd>Shift</kbd>+klick på ett quest i fönstret stegar det: inte i loggen → i loggen →
+                klart att lämna in → inlämnat. Vanligt klick och högerklick gör det addonet gör i spelet.</p>
+        </fieldset>
+        <fieldset>
+            <legend>Sparat</legend>
+            <div class="chips">
+                <button id="reload" title="Som /reload: sparade variabler behålls">Ladda om UI</button>
+                <button id="resetQuests">Nollställ quests</button>
+                <button id="wipe" title="Tar bort sparade variabler, quest-lägen och inställningar">Rensa allt sparat</button>
+            </div>
+        </fieldset>
+    </div>
+    <div id="chatHead"><span>Chatt</span><button id="clearChat">Töm</button></div>
+    <div id="chat" role="log" aria-live="polite"></div>
+</aside>
+
+<script src="/fengari-web.js"></script>
+<script>
+(function () {
+    "use strict";
+    const KEY = "undeadroute-preview";
+    const $ = (id) => document.getElementById(id);
+    const screen = $("screen"), ui = $("ui"), measure = $("measure"), chat = $("chat");
+
+    let store = {};
+    try { store = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { store = {}; }
+    const state = Object.assign({ level: 25, zone: "Hillsbrad Foothills", class: "PALADIN", race: "Scourge" }, store.state);
+    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) { /* private window */ } };
+    store.state = state;
+
+    // WoW colour codes (|cAARRGGBB ... |r) and line breaks, as HTML.
+    function wowHtml(s) {
+        let out = "", open = 0;
+        const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        for (const part of String(s).split(/(\|c[0-9a-fA-F]{8}|\|r|\n)/)) {
+            if (part === "\n") out += "<br>";
+            else if (part === "|r") { if (open) { out += "</span>"; open--; } }
+            else if (/^\|c[0-9a-fA-F]{8}$/.test(part)) { out += '<span style="color:#' + part.slice(4) + '">'; open++; }
+            else out += esc(part);
+        }
+        return out + "</span>".repeat(open);
+    }
+    const rgba = (r, g, b, a) => "rgba(" + Math.round(r * 255) + "," + Math.round(g * 255) + "," + Math.round(b * 255) + "," + a + ")";
+    const TICK = '<svg viewBox="0 0 16 16"><path d="M2.5 8.5l4 4 7-9" fill="none" stroke="#3fd13f" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+    const els = { 0: ui };
+    const sizes = new Map();
+    let scale = 1;
+
+    function line(cls, html) {
+        const p = document.createElement("p");
+        p.className = cls;
+        p.innerHTML = html;
+        chat.appendChild(p);
+        while (chat.children.length > 400) chat.removeChild(chat.firstChild);
+        chat.scrollTop = chat.scrollHeight;
+    }
+    function textStyle(el, size, wrap, spacing, bounded) {
+        el.style.fontSize = size + "px";
+        el.style.lineHeight = (size + spacing) + "px";
+        el.style.whiteSpace = !bounded ? "pre" : wrap ? "pre-wrap" : "nowrap";
+        el.style.overflowWrap = bounded && wrap ? "break-word" : "normal";
+    }
+    function measured(text, size, width, wrap, spacing) {
+        const key = size + "|" + width + "|" + wrap + "|" + spacing + "|" + text;
+        let box = sizes.get(key);
+        if (!box) {
+            textStyle(measure, size, wrap, spacing, width > 0);
+            measure.style.width = width > 0 ? width + "px" : "auto";
+            measure.innerHTML = wowHtml(text) || "&nbsp;";
+            const r = measure.getBoundingClientRect();
+            box = { w: text ? r.width : 0, h: r.height };
+            if (sizes.size > 20000) sizes.clear();
+            sizes.set(key, box);
+        }
+        return box;
+    }
+    function dispatch(id, what, a, b) {
+        if (H.dispatch) H.dispatch(id, what, a, b);
+    }
+
+    // What wow.lua calls. Every function takes plain values only.
+    const H = window.H = {
+        state, saved: store.vars || "", savedQuests: store.quests || "", w: 1024, h: 768,
+
+        create(id, parent, kind, z) {
+            const el = document.createElement("div");
+            el.className = kind;
+            el.style.zIndex = z;
+            el.dataset.id = id;
+            els[id] = el;
+            (els[parent] || ui).appendChild(el);
+            if (kind === "EditBox") {
+                // A real text field, so the addon's edit boxes can be typed into.
+                const input = document.createElement("input");
+                input.type = "text";
+                input.spellcheck = false;
+                el.appendChild(input);
+                el.style.pointerEvents = "auto";
+                input.addEventListener("input", () => dispatch(id, "text", input.value));
+                input.addEventListener("focus", () => dispatch(id, "focus"));
+                input.addEventListener("blur", () => dispatch(id, "blur"));
+                input.addEventListener("keydown", (e) => {
+                    e.stopPropagation();
+                    if (e.key === "Enter") dispatch(id, "enterkey");
+                    if (e.key === "Escape") dispatch(id, "escape");
+                });
+            }
+        },
+        editText(id, text) { const i = els[id].firstChild; if (i && i.value !== text) i.value = text; },
+        editFocus(id, on, select) {
+            const i = els[id].firstChild;
+            if (!i) return;
+            if (on) { i.focus(); if (select) i.select(); } else i.blur();
+        },
+        tip(text) {
+            const t = $("tooltip");
+            if (!text) { t.style.display = "none"; return; }
+            t.innerHTML = wowHtml(text);
+            t.style.display = "block";
+            t.style.left = Math.min(window.innerWidth - 280, mouse.x + 16) + "px";
+            t.style.top = (mouse.y + 16) + "px";
+        },
+        place(id, l, t, w, h) {
+            const s = els[id].style;
+            s.display = "";
+            s.left = l + "px"; s.top = t + "px"; s.width = w + "px"; s.height = h + "px";
+        },
+        hide(id) { els[id].style.display = "none"; },
+        over(id) { return els[id].matches(":hover"); },
+        z(id, z) { els[id].style.zIndex = z; },
+        text(id, text, size, r, g, b, wrap, spacing, bounded, justify) {
+            const el = els[id];
+            el.innerHTML = wowHtml(text);
+            textStyle(el, size, wrap, spacing, bounded);
+            el.style.color = rgba(r, g, b, 1);
+            el.style.textAlign = justify.toLowerCase();
+            el.style.overflow = bounded && !wrap ? "hidden" : "visible";
+            el.style.textOverflow = bounded && !wrap ? "ellipsis" : "clip";
+        },
+        texture(id, path, r, g, b, a) {
+            const el = els[id];
+            el.classList.remove("tick", "unknown");
+            el.style.background = "";
+            el.innerHTML = "";
+            if (/WHITE8x8/i.test(path)) el.style.background = rgba(r, g, b, a);
+            else if (/ReadyCheck-Ready/i.test(path)) { el.classList.add("tick"); el.innerHTML = TICK; }
+            else if (path) { el.classList.add("unknown"); el.title = path; }
+        },
+        backdrop(id, r, g, b, a, er, eg, eb, ea) {
+            const s = els[id].style;
+            s.background = rgba(r, g, b, a);
+            s.boxShadow = "inset 0 0 0 1px " + rgba(er, eg, eb, ea);
+        },
+        mouse(id) {
+            const el = els[id];
+            if (el.dataset.mouse) return;
+            el.dataset.mouse = "1";
+            el.style.pointerEvents = "auto";
+            el.addEventListener("click", (e) => { e.stopPropagation(); dispatch(id, "click", "LeftButton", e.shiftKey); });
+            el.addEventListener("contextmenu", (e) => {
+                e.preventDefault(); e.stopPropagation();
+                dispatch(id, "click", "RightButton", e.shiftKey);
+            });
+            el.addEventListener("mouseenter", () => dispatch(id, "enter"));
+            el.addEventListener("mouseleave", () => dispatch(id, "leave"));
+        },
+        wheel(id) {
+            const el = els[id];
+            el.style.pointerEvents = "auto";
+            el.addEventListener("wheel", (e) => {
+                e.preventDefault(); e.stopPropagation();
+                dispatch(id, "wheel", e.deltaY < 0 ? 1 : -1);
+            }, { passive: false });
+        },
+        drag(id) {
+            const el = els[id];
+            el.addEventListener("mousedown", (e) => {
+                // A button inside the frame takes the mouse itself, as in the game.
+                if (e.button !== 0 || e.target.closest("[data-mouse]") !== el) return;
+                const x0 = e.clientX, y0 = e.clientY;
+                let moved = false;
+                const move = (m) => {
+                    if (!moved) { moved = true; dispatch(id, "dragstart"); }
+                    dispatch(id, "drag", (m.clientX - x0) / scale, (m.clientY - y0) / scale);
+                };
+                const up = () => {
+                    window.removeEventListener("mousemove", move);
+                    window.removeEventListener("mouseup", up);
+                    if (moved) dispatch(id, "dragstop");
+                };
+                window.addEventListener("mousemove", move);
+                window.addEventListener("mouseup", up);
+            });
+        },
+        measureW(text, size, spacing) { return measured(text, size, 0, false, spacing).w; },
+        measureH(text, size, width, wrap, spacing) { return measured(text, size, wrap ? width : 0, wrap, spacing).h; },
+
+        chat(text) { line("", wowHtml(text)); },
+        alert(text) {
+            line("alert", wowHtml(text));
+            const d = document.createElement("div");
+            d.innerHTML = wowHtml(text);
+            $("alerts").appendChild(d);
+            while ($("alerts").children.length > 4) $("alerts").removeChild($("alerts").firstChild);
+            setTimeout(() => d.remove(), 6000);
+        },
+        note(text) { line("note", wowHtml(text)); },
+        fail(text) { line("fail", wowHtml("Lua-fel: " + text)); console.error(text); },
+        pin(text) { $("pin").textContent = text; },
+        arrow(text) { $("arrow").textContent = text || "ingen"; },
+        tooltip(link) {
+            const t = $("tooltip");
+            if (!link) { t.style.display = "none"; return; }
+            t.textContent = link + " – föremålets verktygstips visas bara i spelet.";
+            t.style.display = "block";
+            t.style.left = Math.min(window.innerWidth - 280, mouse.x + 16) + "px";
+            t.style.top = (mouse.y + 16) + "px";
+        },
+        persist(db, quests) {
+            if (store.vars === db && store.quests === quests) return;
+            store.vars = db; store.quests = quests;
+            save();
+        },
+        zone(name) {
+            const o = document.createElement("option");
+            o.value = o.textContent = name;
+            $("zone").appendChild(o);
+        },
+    };
+
+    const mouse = { x: 0, y: 0 };
+    window.addEventListener("mousemove", (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
+
+    function fit() {
+        // 768 units tall as in the game; a tall, narrow browser window scales by width instead so the window still fits.
+        scale = Math.min(screen.clientHeight / 768, screen.clientWidth / 1024);
+        H.w = screen.clientWidth / scale;
+        H.h = screen.clientHeight / scale;
+        ui.style.transform = "scale(" + scale + ")";
+        ui.style.width = H.w + "px";
+        ui.style.height = H.h + "px";
+    }
+    const sim = (name, ...args) => {
+        if (!window.Sim) return undefined;
+        try { return window.Sim[name](...args); } catch (e) { H.fail(String(e)); }
+    };
+
+    // Panel wiring.
+    const level = $("level"), levelOut = $("levelOut");
+    const showLevel = () => { levelOut.textContent = level.value; };
+    const setLevel = (n) => {
+        state.level = Math.max(1, Math.min(60, n));
+        level.value = state.level;
+        showLevel(); save();
+        sim("setLevel", state.level);
+    };
+    level.value = state.level; showLevel();
+    level.addEventListener("input", showLevel);
+    level.addEventListener("change", () => setLevel(Number(level.value)));
+    $("levelUp").addEventListener("click", () => setLevel(state.level + 1));
+    $("zone").addEventListener("change", (e) => { state.zone = e.target.value; save(); sim("setZone", state.zone); });
+    for (const id of ["class", "race"]) {
+        $(id).value = state[id];
+        $(id).addEventListener("change", (e) => { state[id] = e.target.value; save(); location.reload(); });
+    }
+    function runSlash(text) {
+        text = text.trim();
+        if (!text) return;
+        if (/^\/(reload|rl)\b/i.test(text)) return location.reload();
+        line("note", wowHtml("> " + text));
+        if (!sim("slash", text)) H.note("Okänt kommando.");
+    }
+    $("run").addEventListener("click", () => runSlash($("slash").value));
+    $("slash").addEventListener("keydown", (e) => { if (e.key === "Enter") runSlash($("slash").value); });
+    for (const b of document.querySelectorAll("[data-slash]")) b.addEventListener("click", () => runSlash(b.dataset.slash));
+    for (const b of document.querySelectorAll("[data-event]")) {
+        b.addEventListener("click", () => { H.note("Händelse: " + b.dataset.event); sim("event", b.dataset.event); });
+    }
+    $("reload").addEventListener("click", () => location.reload());
+    $("resetQuests").addEventListener("click", () => { sim("resetQuests"); H.note("Alla quest-lägen nollställda."); });
+    $("wipe").addEventListener("click", () => { try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ } location.reload(); });
+    $("clearChat").addEventListener("click", () => { chat.innerHTML = ""; });
+    window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !/^(INPUT|SELECT)$/.test(document.activeElement.tagName)) sim("escape");
+    });
+    window.addEventListener("resize", () => { fit(); sim("resize"); });
+
+    async function get(url) {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error(url + ": " + res.status + " " + (await res.text()));
+        return res;
+    }
+    async function boot() {
+        fit();
+        const toc = await (await get("/toc")).json();
+        $("title").textContent = toc.title + " " + toc.version;
+        document.title = toc.title + " – förhandsvisning";
+        H.addon = toc.addon; H.files = toc.files; H.sources = {};
+        H.savedNames = toc.saved; H.start = toc.start || "/route";
+        H.env = await (await get("/env.lua")).text();
+        $("slash").value = H.start;
+        for (const f of toc.files) H.sources[f] = await (await get("/addon/" + f)).text();
+        // Text is measured to lay the window out, so the font has to be in first.
+        try { await Promise.all([10, 12, 16].map((n) => document.fonts.load(n + 'px "WowFont"'))); } catch (e) { /* fallback font */ }
+        const lua = await (await get("/wow.lua")).text();
+        fengari.load(lua, "@wow.lua")();
+        setInterval(() => sim("tick", 0.1), 100); // OnUpdate scripts; does nothing for an addon without any
+        if ([...$("zone").options].some((o) => o.value === state.zone)) $("zone").value = state.zone;
+        else { state.zone = $("zone").value; save(); }
+    }
+    boot().catch((e) => H.fail(String(e && e.message || e)));
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<Bindings>
+    <Binding name="ZODUI_TOGGLE" category="ZodUI">
+        ZodUI_Toggle()
+    </Binding>
+    <Binding name="ZODUI_FIND" category="ZodUI">
+        ZodUI_Find()
+    </Binding>
+    <Binding name="ZODUI_NOTES" category="ZodUI">
+        ZodUI_Open("notes")
+    </Binding>
+    <Binding name="ZODUI_UNLOCK" category="ZodUI">
+        ZodUI_Unlock()
+    </Binding>
+    <Binding name="ZODUI_GUIDE" category="ZodUI">
+        ZodUI_Guide("")
+    </Binding>
+    <Binding name="ZODUI_GUIDE_NEXT" category="ZodUI">
+        ZodUI_Guide("next")
+    </Binding>
+    <Binding name="ZODUI_GUIDE_BACK" category="ZodUI">
+        ZodUI_Guide("back")
+    </Binding>
+    <Binding name="CLICK ZodUIPetFeed:LeftButton" category="ZodUI"/>
+</Bindings>
