@@ -6,11 +6,11 @@ ZodUI leaves action bars, unit frames, bags and nameplates to the addons that al
 
 ## Addons it needs
 
-ZodUI runs on its own. Three parts use another addon, and do nothing without it. The module's settings and **Settings > General** say whether each one is installed:
+ZodUI runs on its own. Two parts need another addon and do nothing without it; two more get better with one. The module's settings and **Settings > General** say whether each one is installed:
 
 | Addon | Needed for |
 |---|---|
-| Forever Leveling BiS | Hand-me-downs (its stat weights; without them it says nothing) and the upgrade lines of Loot shout |
+| Forever Leveling BiS (better with) | Leveling stat weights by class and level for Hand-me-downs and Loot shout's upgrades. Without it: NaowhForever BiS's weights, simulated on Forever; without both, ZodUI's own, worked out from how the game turns stats into damage (`Core/Weights.lua`). |
 | ForeverDungeonJournal | The Dungeon guide's maps of Forever's dungeons and of those the game has no map for (Zul'Farrak, Sunken Temple and more). The game's own maps need nothing. |
 | Codex Forever | Alt-click on an item opens it in Codex, and the search ends with a Codex line |
 
@@ -131,6 +131,8 @@ The addon runs outside the game in two ways. Both borrow the Lua VM that Undead 
 **Dungeon guide routes.** The guide's lines follow the corridors because `tools/trace_routes.py` traced them on ForeverDungeonJournal's copies of the dungeon maps (the same pictures the guide shows): the map's sharpest edges are its walls, what reaches the picture's border without crossing one is the parchment outside, and the way between two steps is the cheapest one inside, kept to the middle of the corridors. It writes `ns.GUIDE_TRACED` at the end of `Modules/GuideData.lua` and a picture of every floor with its lines to look over. After changing a route: `node tools/dumpguides.js > guides.json`, then `python -I tools/trace_routes.py guides.json "<WoW>/_forever_/Interface/AddOns/ForeverDungeonJournal/Media" <folder for the pictures>` (needs Pillow, numpy, scipy and scikit-image).
 
 **Benchmark.** `node tools/run.js --bench` times the hot paths (a frame, a trade chat line, loot, bags, XP, tooltips, the open window) and profiles them by module and event with the same profiler as `/zod perf`. The VM is far slower than the game's Lua, so the numbers compare one version with another, not with the game.
+
+**Deploy and release.** `tools/deploy.cmd` (or `deploy.ps1`) copies ZodUI and Undead Route into the game, `tools/release.ps1` zips them, and `tools/publish.ps1` publishes both to the public repo `ZodUI-Forever` with a clean history and a release; `tools/public-README.md` is that repo's README. They expect the two repos side by side.
 
 **Preview.** From `UndeadRoute/tools`, `ADDON_DIR=../../ZodUI PORT=8378 node preview/server.js` draws the window in a browser at http://localhost:8378 with a made-up character (`tools/preview-env.lua`).
 

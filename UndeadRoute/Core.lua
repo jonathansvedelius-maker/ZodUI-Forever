@@ -3065,6 +3065,27 @@ function ns.PinArrow(place)
     if ready then UpdateArrow() end
 end
 
+-- Versions before 1.21 put their pins in TomTom too, which keeps waypoints across logins: one left there still
+-- drew TomTom's arrow. The route no longer uses TomTom, so it takes out the waypoints it made (from = "Undead
+-- Route") and leaves TomTom and everything else in it alone. Returns how many it removed.
+function ns.ClearOldTomTom()
+    local tt = _G.TomTom
+    if type(tt) ~= "table" or type(tt.waypoints) ~= "table" or type(tt.RemoveWaypoint) ~= "function" then return 0 end
+    local ours = {}
+    for _, byKey in pairs(tt.waypoints) do
+        if type(byKey) == "table" then
+            for _, uid in pairs(byKey) do
+                if type(uid) == "table" and uid.from == "Undead Route" then ours[#ours + 1] = uid end
+            end
+        end
+    end
+    local removed = 0
+    for _, uid in ipairs(ours) do
+        if pcall(tt.RemoveWaypoint, tt, uid) then removed = removed + 1 end
+    end
+    return removed
+end
+
 Refresh = function()
     if not db then return end
     if ready then UpdateArrow() end
@@ -3374,6 +3395,8 @@ events:SetScript("OnEvent", function(_, event, arg1)
         RemindDungeons(true)
         RemindClass(true)
         RemindHere()
+        -- After TomTom has loaded its saved waypoints (its own PLAYER_LOGIN may come after this one).
+        if C_Timer and C_Timer.After then C_Timer.After(3, ns.ClearOldTomTom) else ns.ClearOldTomTom() end
     elseif not ready then
         return
     elseif event == "PLAYER_LEVEL_UP" then

@@ -5,14 +5,14 @@ local ADDON, ns = ...
 -- named again at the mailbox while it is still in your bags. Its tooltip names the one
 -- it is for.
 --
--- Each character's gear is kept as it logs in and changes gear. The scores use Forever
--- Leveling BiS's stat weights for the other character's class and level
--- (ForeverLevelingBiS_API.GetWeights), so nothing is said without that addon.
+-- Each character's gear is kept as it logs in and changes gear. The scores use stat weights for the other
+-- character's class and level (Core/Weights.lua: Forever Leveling BiS's or NaowhForever's when installed,
+-- else ZodUI's own).
 
 local M = ns:NewModule("handouts", {
     title = "Hand-me-downs",
-    desc = "A Bind on Equip item that is no upgrade for you but is one for another of your characters is said, and named again at the mailbox. Needs Forever Leveling BiS for the stat weights.",
-    needs = { "ForeverLevelingBiS" }, needsAll = true,
+    desc = "A Bind on Equip item that is no upgrade for you but is one for another of your characters is said, and named again at the mailbox.",
+    needs = { "ForeverLevelingBiS", "NaowhForever_BiS" },
     defaults = { enabled = true, quality = 2, margin = 5 },
     options = {
         { type = "cycle", key = "quality", label = "From this quality", choices = { { 2, "Green and better" }, { 3, "Blue and better" }, { 4, "Purple only" } } },
@@ -23,22 +23,6 @@ local M = ns:NewModule("handouts", {
 local SETTLE = 1.5
 local KEEP = 40
 local SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 }
-
--- The game's stat names -> Forever Leveling BiS's weight keys (its Equipped.lua).
-local STATS = {
-    ITEM_MOD_STRENGTH_SHORT = "str", ITEM_MOD_AGILITY_SHORT = "agi", ITEM_MOD_STAMINA_SHORT = "sta",
-    ITEM_MOD_INTELLECT_SHORT = "int", ITEM_MOD_SPIRIT_SHORT = "spi",
-    ITEM_MOD_ATTACK_POWER_SHORT = "atkpwr", ITEM_MOD_RANGED_ATTACK_POWER_SHORT = "rgdatkpwr",
-    ITEM_MOD_FERAL_ATTACK_POWER_SHORT = "feratkpwr", ITEM_MOD_MELEE_ATTACK_POWER_SHORT = "feratkpwr",
-    ITEM_MOD_SPELL_POWER_SHORT = "splpwr", ITEM_MOD_SPELL_DAMAGE_DONE_SHORT = "spldmg",
-    ITEM_MOD_SPELL_HEALING_DONE_SHORT = "splheal", ITEM_MOD_SPELL_PENETRATION_SHORT = "splpen",
-    ITEM_MOD_ARCANE_DAMAGE_DONE_SHORT = "arcsplpwr", ITEM_MOD_FIRE_DAMAGE_DONE_SHORT = "firsplpwr",
-    ITEM_MOD_FROST_DAMAGE_DONE_SHORT = "frosplpwr", ITEM_MOD_HOLY_DAMAGE_DONE_SHORT = "holsplpwr",
-    ITEM_MOD_NATURE_DAMAGE_DONE_SHORT = "natsplpwr", ITEM_MOD_SHADOW_DAMAGE_DONE_SHORT = "shasplpwr",
-    ITEM_MOD_DEFENSE_SKILL_RATING_SHORT = "defrtng", ITEM_MOD_BLOCK_VALUE_SHORT = "block",
-    ITEM_MOD_MANA_REGENERATION_SHORT = "manargn", ITEM_MOD_POWER_REGEN0_SHORT = "manargn",
-    ITEM_MOD_HEALTH_REGEN_SHORT = "healthrgn", RESISTANCE0_NAME = "armor", ITEM_MOD_DAMAGE_PER_SECOND_SHORT = "dps",
-}
 
 -- Where an item goes: its slots, by the game's equip location.
 local WHERE = {
@@ -88,28 +72,9 @@ function M.CanWear(class, level, classID, subID)
     return false
 end
 
-function M.Score(link, weights)
-    local stats = link and ((C_Item and C_Item.GetItemStats) or GetItemStats)
-    stats = stats and stats(link)
-    if type(stats) ~= "table" or type(weights) ~= "table" then return 0 end
-    local score = 0
-    for key, value in pairs(stats) do
-        local w = STATS[key] and weights[STATS[key]]
-        if type(w) == "number" and type(value) == "number" then score = score + w * value end
-    end
-    return score
-end
-
-local function Weights(class, level)
-    local api = ForeverLevelingBiS_API
-    if type(api) ~= "table" or type(api.GetWeights) ~= "function" then return nil end
-    local ok, weights = pcall(api.GetWeights, class, nil, level)
-    return ok and type(weights) == "table" and weights or nil
-end
-
 -- How much better `link` is for `char` than what it wears in that slot, in percent, and true when it
--- wears nothing there; nil when it is no better.
-function M:Gain(char, link)
+-- wears nothing there; nil when it is no better by at least `margin` percent.
+function M.GainAt(char, link, margin)
     local instant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
     if not (instant and char and char.class and char.gear) then return nil end
     local _, _, _, equip, _, classID, subID = instant(link)
@@ -117,20 +82,21 @@ function M:Gain(char, link)
     if not slots or not M.CanWear(char.class, char.level, classID, subID) then return nil end
     local _, _, _, _, req = Info(link)
     if (tonumber(req) or 0) > (char.level or 1) + 3 then return nil end
-    local weights = Weights(char.class, char.level)
-    if not weights then return nil end
-    local new = M.Score(link, weights)
+    local score = ns.Weights.Scorer(char.class, char.level, char == ns.char or char.mine)
+    local new = score(link)
     if new <= 0 then return nil end
     local old
     for _, slot in ipairs(slots) do
-        local s = M.Score(char.gear[slot], weights)
+        local s = char.gear[slot] and score(char.gear[slot]) or 0
         old = old and math.min(old, s) or s
     end
     old = old or 0
     if old <= 0 then return 100, true end
     local pct = (new - old) / old * 100
-    return pct >= self.db.margin and math.floor(pct + 0.5) or nil
+    return pct >= (margin or 0) and math.floor(pct + 0.5) or nil
 end
+
+function M:Gain(char, link) return M.GainAt(char, link, self.db.margin) end
 
 -- The best other character for `link`: char, percent.
 function M:For(link)

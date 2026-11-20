@@ -995,6 +995,28 @@ do
     out = {}
 end
 
+-- An old version's waypoint left in TomTom is taken out; one you set yourself, or another addon's, stays.
+do
+    local ours = { 1434, 0.356, 0.108, title = "Hand in: Welcome to the Jungle", from = "Undead Route" }
+    local yours = { 1434, 0.5, 0.5, title = "My spot", from = "TomTom/way" }
+    local removedUids = {}
+    TomTom = {
+        waypoints = { [1434] = { a = ours, b = yours } },
+        RemoveWaypoint = function(self, uid)
+            for _, byKey in pairs(self.waypoints) do
+                for k, v in pairs(byKey) do if v == uid then byKey[k] = nil end end
+            end
+            removedUids[#removedUids + 1] = uid
+        end,
+    }
+    local n = ns.ClearOldTomTom()
+    assert(n == 1 and removedUids[1] == ours, "the route's old TomTom waypoint is not taken out")
+    assert(TomTom.waypoints[1434].b == yours, "the route takes out a TomTom waypoint that is not its own")
+    TomTom = nil
+    assert(ns.ClearOldTomTom() == 0, "without TomTom the clean-up does not stay quiet")
+    say("old TomTom waypoints of the route cleared; the player's own stay")
+end
+
 -- What other addons can ask.
 local needed = UndeadRoute.NeededItems()
 local lumber, kor = false, false

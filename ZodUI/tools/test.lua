@@ -615,13 +615,14 @@ say("--- the other addons parts of ZodUI need, said in their settings")
 W.loaded.CodexForever = true
 ns.Show("settings", "handouts")
 pump(0.3)
-check(has("Needs Forever Leveling BiS, for its stat weights"), "Hand-me-downs says it needs Forever Leveling BiS")
+check(has("Better with Forever Leveling BiS, for its leveling stat weights") and has("Better with NaowhForever BiS"),
+    "Hand-me-downs says which addons make it better, not that it needs them")
 ns.Show("settings", "guide")
 pump(0.3)
 check(has("Needs ForeverDungeonJournal, for its map pictures"), "the Dungeon guide says what ForeverDungeonJournal is for")
 ns.Show("settings", "general")
 pump(0.3)
-check(has("Needs Forever Leveling BiS") and has("Needs ForeverDungeonJournal") and has("Installed: Codex Forever"),
+check(has("Better with Forever Leveling BiS") and has("Needs ForeverDungeonJournal") and has("Installed: Codex Forever"),
     "General lists every addon ZodUI's parts need, and which are installed")
 W.loaded.CodexForever = nil
 
@@ -3949,7 +3950,7 @@ do
     ForeverLevelingBiS_API = { GetGain = function() error("broken") end, IsUpgrade = function() return true end }
     check(S.Upgrade(BLUE) == true, "a failing GetGain falls back to IsUpgrade")
     ForeverLevelingBiS_API = nil
-    check(S.Upgrade(BLUE) == false, "without the addon, nothing is an upgrade")
+    check(S.Upgrade(BLUE) == false, "without the addon, an item with no stats is no upgrade")
 
     -- what counts
     check(S:Line(EPIC, 19019, 4, "created") == nil, "a made item is never said")
@@ -4581,7 +4582,32 @@ do
     pump(2)
     check(#ns.db.handouts == 0 and not printed("Hand-me-down"), "an upgrade for you is yours")
     ForeverLevelingBiS_API = nil
-    check(H:For("item:901") == nil, "without Forever Leveling BiS nothing is said")
+    -- Without Forever Leveling BiS: NaowhForever's weights when it is there, else ZodUI's own.
+    local _, source = ns.Weights.Scorer("ROGUE", 22)
+    char, pct = H:For("item:901")
+    check(source == "ZodUI" and char and char.name == "Stab" and pct == 150,
+        "without the weight addons ZodUI's own weights still find the rogue: " .. tostring(source) .. " " .. tostring(pct))
+    local own = ns.Weights.Own("ROGUE", 22)
+    check(own.ITEM_MOD_AGILITY_SHORT > own.ITEM_MOD_STRENGTH_SHORT and own.ITEM_MOD_DAMAGE_PER_SECOND_SHORT == 14,
+        "a rogue's own weights put Agility over Strength, and 1 weapon DPS at 14 attack power")
+    local mage = ns.Weights.Own("MAGE", 30)
+    check(mage.ITEM_MOD_SPELL_DAMAGE_DONE_SHORT == 1 and (mage.ITEM_MOD_AGILITY_SHORT or 0) == 0, "a mage's own weights are spell damage, no Agility")
+    local hunter = ns.Weights.Own("HUNTER", 30)
+    check(hunter.ITEM_MOD_RANGED_ATTACK_POWER_SHORT == 1 and hunter.ITEM_MOD_AGILITY_SHORT > 2, "a hunter's own weights count ranged attack power, and Agility above it")
+    local asked
+    NaowhForever = { StatWeights = {
+        TreeSpec = function(class, i) asked = class .. i return "combat-rogue" end,
+        For = function(key) return key == "combat-rogue" and { agi = 2 } or nil end,
+        KeyWorth = function(gameKey, amount, w) return gameKey == "ITEM_MOD_AGILITY_SHORT" and amount * w.agi or 0 end,
+    } }
+    _, source = ns.Weights.Scorer("ROGUE", 22)
+    char, pct = H:For("item:901")
+    check(source == "NaowhForever" and asked == "ROGUE2" and char and char.name == "Stab" and pct == 150,
+        "NaowhForever's weights are used when Forever Leveling BiS is not there, for the rogue's leveling tree")
+    NaowhForever = { StatWeights = { For = function() error("broken") end, KeyWorth = function() return 0 end, TreeSpec = function() return "x" end } }
+    _, source = ns.Weights.Scorer("ROGUE", 22)
+    check(source == "ZodUI", "a failing NaowhForever falls back to ZodUI's own")
+    NaowhForever = nil
 
     W.bags[0][15] = nil
     C_Item.GetItemInfo, C_Item.GetItemStats, C_Item.GetItemInfoInstant, ForeverLevelingBiS_API, ns.db.chars =

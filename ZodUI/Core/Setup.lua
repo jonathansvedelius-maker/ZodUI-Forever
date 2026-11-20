@@ -63,6 +63,9 @@ ns.AddPage({
 
 -- Newest first. One line per thing a player would notice.
 ns.NEWS = {
+    { "0.65.0", {
+        "Hand-me-downs and Loot shout's upgrades work without Forever Leveling BiS: they use NaowhForever's stat weights when it is there, else ZodUI's own, worked out from how the game turns stats into damage.",
+    } },
     { "0.64.0", {
         "Settings say which other addon a part of ZodUI needs, and whether you have it: Forever Leveling BiS (Hand-me-downs, Loot shout's upgrades), ForeverDungeonJournal (the Dungeon guide's Forever maps) and Codex Forever (Alt-click on items). General lists all three.",
     } },

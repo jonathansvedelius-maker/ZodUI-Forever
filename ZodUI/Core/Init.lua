@@ -10,7 +10,7 @@ local ADDON, ns = ...
 -- guarded, and what went wrong is kept for /zod errors.
 
 ZodUI = ns
-ns.version = "0.64.0"
+ns.version = "0.65.0"
 ns.modules = {} -- by key
 ns.order = {} -- in load order, which is the order Settings lists them
 ns.errors = {}
@@ -207,23 +207,27 @@ function ns.AddOnLoaded(name)
 end
 
 -- The other addons parts of ZodUI need, and what for. A module names the ones it needs (info.needs), and its
--- settings say whether each is installed; General lists them all. Without one, only that part does nothing.
+-- settings say whether each is installed; General lists them all. Without one, only that part does nothing;
+-- one marked `better` only makes a part better, and ZodUI does its own without it.
 ns.NEEDS = {
-    ForeverLevelingBiS = { name = "Forever Leveling BiS",
-        what = "its stat weights: Hand-me-downs needs them for everything, Loot shout for the upgrades" },
+    ForeverLevelingBiS = { name = "Forever Leveling BiS", better = true,
+        what = "its leveling stat weights, by class and level, for Hand-me-downs and Loot shout's upgrades (without it: NaowhForever's, else ZodUI's own)" },
+    NaowhForever_BiS = { name = "NaowhForever BiS", better = true,
+        what = "its stat weights simulated on Forever, when Forever Leveling BiS is not there (else ZodUI's own)" },
     ForeverDungeonJournal = { name = "ForeverDungeonJournal",
         what = "its map pictures: the Dungeon guide shows them for Forever's dungeons and the ones the game has no map for" },
     CodexForever = { name = "Codex Forever",
         what = "Alt-click on an item opens it there, and the search ends with a Codex line" },
 }
-ns.NEEDS_ORDER = { "ForeverLevelingBiS", "ForeverDungeonJournal", "CodexForever" }
+ns.NEEDS_ORDER = { "ForeverLevelingBiS", "NaowhForever_BiS", "ForeverDungeonJournal", "CodexForever" }
 
 -- One line about a needed addon: its name, whether it is on, and what it is for.
 function ns.NeedText(addon)
     local need = ns.NEEDS[addon]
     if not need then return "" end
     local on = ns.AddOnLoaded(addon)
-    return (on and "|cff59d973Installed:|r " or "|cffff5959Needs|r ") .. "|cffffffff" .. need.name .. "|r, for " .. need.what .. "."
+    local state = on and "|cff59d973Installed:|r " or (need.better and "|cff999999Better with|r " or "|cffff5959Needs|r ")
+    return state .. "|cffffffff" .. need.name .. "|r, for " .. need.what .. "."
 end
 
 -- The last notices, newest first, for /zod notices.

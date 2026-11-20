@@ -1,21 +1,22 @@
 local ADDON, ns = ...
 
 -- Loot shout: says your fine loot in guild chat, with its link. Purple and better by default; a blue or
--- green item that is an upgrade for you too, when Forever Leveling BiS can tell (its public
--- ForeverLevelingBiS_API, GetGain). Quest rewards count; made items never do.
+-- green item that is an upgrade for you too: Forever Leveling BiS says so when it is installed (its public
+-- ForeverLevelingBiS_API, GetGain), else ZodUI weighs it against what you wear (CoreWeights.lua).
+-- Quest rewards count; made items never do.
 -- It is careful with the guild's chat: at most one line every GAP seconds and HOUR_MOST an hour, the same item
 -- once in a while, nothing in combat or the chat lockdown (it waits, up to WAIT_MOST), and nothing outside a guild.
 
 local M = ns:NewModule("shout", {
     title = "Loot shout",
     desc = "Says your fine loot in guild chat: purple and better, and blue or green items that are an upgrade for "
-        .. "you (with Forever Leveling BiS). At most one line a minute.",
-    needs = { "ForeverLevelingBiS" },
+        .. "you. At most one line a minute.",
+    needs = { "ForeverLevelingBiS", "NaowhForever_BiS" },
     defaults = { enabled = true, quality = 4, upgrades = false, quests = true }, -- upgrades: many lines in guild chat, so yours to switch on
     options = {
         { type = "cycle", key = "quality", label = "Say in guild chat", choices = { { 0, "Never" }, { 3, "Blue and better" },
             { 4, "Purple and better" }, { 5, "Orange only" } } },
-        { type = "check", key = "upgrades", label = "Also a green or blue item that is an upgrade for you (Forever Leveling BiS)" },
+        { type = "check", key = "upgrades", label = "Also a green or blue item that is an upgrade for you" },
         { type = "check", key = "quests", label = "Quest rewards count too" },
         { type = "note", text = "/zod shout test shows in your own chat what would be said, without saying it.", lines = 2 },
     },
@@ -42,19 +43,32 @@ local function Plain(v)
     return v
 end
 
--- Whether Forever Leveling BiS calls the item an upgrade for your main spec.
+-- What you wear now, as Hand-me-downs weighs a character: class, level and gear by slot.
+local function Me()
+    local _, class = UnitClass("player")
+    local gear = {}
+    for slot = 1, 18 do gear[slot] = GetInventoryItemLink and GetInventoryItemLink("player", slot) or nil end
+    return { class = class, level = Plain(UnitLevel("player")) or 1, gear = gear, mine = true }
+end
+
+-- Whether the item is an upgrade for you: Forever Leveling BiS's word when it is installed, else the stat weights
+-- (NaowhForever's or ZodUI's own) against what you wear in that slot.
 function M.Upgrade(link)
     local api = ForeverLevelingBiS_API
-    if type(api) ~= "table" then return false end
-    if api.GetGain then
-        local ok, gain = pcall(api.GetGain, link)
-        if ok and type(gain) == "number" then return gain > 0 end
+    if type(api) == "table" then
+        if api.GetGain then
+            local ok, gain = pcall(api.GetGain, link)
+            if ok and type(gain) == "number" then return gain > 0 end
+        end
+        if api.IsUpgrade then
+            local ok, yes = pcall(api.IsUpgrade, link)
+            if ok and type(yes) == "boolean" then return yes end
+        end
     end
-    if api.IsUpgrade then
-        local ok, yes = pcall(api.IsUpgrade, link)
-        return ok and yes == true
-    end
-    return false
+    local H = ns.modules.handouts
+    if not (H and H.GainAt and UnitClass) then return false end
+    local ok, pct = pcall(H.GainAt, Me(), link, 1)
+    return ok and pct ~= nil
 end
 
 -- The line to say for an item, or nil when it is not worth saying.
