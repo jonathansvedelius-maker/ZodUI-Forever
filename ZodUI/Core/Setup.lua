@@ -63,6 +63,9 @@ ns.AddPage({
 
 -- Newest first. One line per thing a player would notice.
 ns.NEWS = {
+    { "0.65.1", {
+        "The group headings in the list on the left (This character, All characters, ...) have a colour of their own with the Forever look: your accent, or a warm tan with the gold accent.",
+    } },
     { "0.65.0", {
         "Hand-me-downs and Loot shout's upgrades work without Forever Leveling BiS: they use NaowhForever's stat weights when it is there, else ZodUI's own, worked out from how the game turns stats into damage.",
     } },

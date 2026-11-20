@@ -76,9 +76,9 @@ local function Heading(f, group)
         c[self.group] = not c[self.group] or nil
         ns.Refresh()
     end)
-    head:SetScript("OnEnter", function(self)
-        self.label:SetTextColor(T.GOLD[1], T.GOLD[2], T.GOLD[3])
-        self.sign:SetTextColor(T.GOLD[1], T.GOLD[2], T.GOLD[3])
+    head:SetScript("OnEnter", function(self) -- white: the heading may already be in the accent
+        self.label:SetTextColor(1, 1, 1)
+        self.sign:SetTextColor(1, 1, 1)
     end)
     head:SetScript("OnLeave", function(self)
         local c = T.HeadColor()

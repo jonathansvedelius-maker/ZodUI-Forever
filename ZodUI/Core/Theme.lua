@@ -87,9 +87,14 @@ function T.NavColor(on)
     if T.look == "game" then return on and { 1, 1, 1 } or T.GAME_YELLOW end
     return on and T.GOLD or { 0.8, 0.8, 0.8 }
 end
--- A group's heading in that list.
+-- A group's heading in that list. With the Forever look the pages are the game's yellow, so the headings take
+-- the accent to stand apart from them; with the gold accent, which is that same yellow, a warm tan instead.
+T.HEAD_TAN = { 0.80, 0.62, 0.42 }
 function T.HeadColor()
-    return T.look == "game" and T.GAME_YELLOW or T.MUTED
+    if T.look ~= "game" then return T.MUTED end
+    local y, a = T.GAME_YELLOW, T.GOLD
+    local same = math.abs(a[1] - y[1]) + math.abs(a[2] - y[2]) + math.abs(a[3] - y[3]) < 0.15
+    return same and T.HEAD_TAN or a
 end
 
 -- A window's close button: the game's red X with the Forever look, ZodUI's own X with Modern.
