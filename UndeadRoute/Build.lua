@@ -7,7 +7,7 @@ local _, ns = ...
 --   NaowhForever_JourneysData    where each quest is handed in, and its objectives' camps     (loaded on demand)
 --   ForeverDungeonJournal        objectives and required items of class quest chains          (optional)
 -- Quests of both factions and every race and class are kept, each tagged with who may take it (side, race
--- and class masks); Core.lua keeps this character's at login. Reward items come from the quest recorder.
+-- and class masks); Route.lua keeps this character's at login. Reward items come from the quest recorder.
 --
 -- ns.BuildQuests(src, stages) is the builder itself; tools/gen.lua runs the same one on the files, for the tests.
 -- It makes:
@@ -100,19 +100,39 @@ function ns.BuildQuests(src, stages)
 
     -- A class quest is one only one or two classes can take. A wider mask ("every class but the Warlock")
     -- marks a zone quest with a class twin: it stays in the zone lists, with its class mask.
+    -- Worked out once for each mask: there are a few dozen masks and thousands of quests.
+    local only = {}
     local function ClassOnly(mask)
-        local n = 0
-        for _, cid in ipairs(classOrder) do if bit(mask, cid) then n = n + 1 end end
-        return mask > 0 and n <= 2
+        local v = only[mask]
+        if v == nil then
+            local n = 0
+            for _, cid in ipairs(classOrder) do if bit(mask, cid) then n = n + 1 end end
+            v = mask > 0 and n <= 2
+            only[mask] = v
+        end
+        return v
+    end
+
+    -- Each class's quests, from one pass over every quest (one pass per class was most of the build's time).
+    local idsOf, inSetOf = {}, {}
+    for _, cid in ipairs(classOrder) do idsOf[cid], inSetOf[cid] = {}, {} end
+    for id, q in pairs(D.Quests) do
+        -- { name, level, reqLevel, side, raceMask, classMask, map, x, y, giver }
+        local mask = q[6]
+        if ClassOnly(mask) then
+            for _, cid in ipairs(classOrder) do
+                if bit(mask, cid) then
+                    local ids = idsOf[cid]
+                    ids[#ids + 1] = id
+                    inSetOf[cid][id] = true
+                end
+            end
+        end
     end
 
     local classQuests = {}
     for _, cid in ipairs(classOrder) do
-        local ids, inSet = {}, {}
-        for id, q in pairs(D.Quests) do
-            -- { name, level, reqLevel, side, raceMask, classMask, map, x, y, giver }
-            if ClassOnly(q[6]) and bit(q[6], cid) then ids[#ids + 1] = id inSet[id] = true end
-        end
+        local ids, inSet = idsOf[cid], inSetOf[cid]
         table.sort(ids, function(a, b)
             local qa, qb = D.Quests[a], D.Quests[b]
             if qa[3] ~= qb[3] then return qa[3] < qb[3] end

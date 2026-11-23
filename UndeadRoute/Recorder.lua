@@ -10,7 +10,7 @@ local ADDON, ns = ...
 --
 -- At load, the shipped Recorded.lua and then this account's own recordings are laid over the generated
 -- quests: a recorded place, giver, hand-in or reward replaces the generated one, and a quest the generated
--- data lacks is added to its zone. Core.lua builds the route from the result at login.
+-- data lacks is added to its zone. Route.lua builds the route from the result at login.
 
 local VERSION = 1
 local rec -- UndeadRouteRecordDB.quests
@@ -171,8 +171,16 @@ function R.LogUpdate()
                     if at then
                         local q = Entry(id)
                         local spot = q.spot
-                        if not spot or spot[1] ~= at[1] then spot = { at[1], 0, 0, 0 } q.spot = spot end
+                        if not spot then spot = { at[1], 0, 0, 0 } q.spot = spot end
+                        if spot[1] ~= at[1] then
+                            -- Another map (a cave, the next zone): counted apart in q.spotAlt, so one kill there
+                            -- does not throw away what was seen here. It takes over once more of the work is there.
+                            local alt = q.spotAlt
+                            if not alt or alt[1] ~= at[1] then alt = { at[1], 0, 0, 0 } q.spotAlt = alt end
+                            spot = alt
+                        end
                         spot[2], spot[3], spot[4] = spot[2] + at[2], spot[3] + at[3], spot[4] + 1
+                        if q.spotAlt and q.spotAlt[4] > q.spot[4] then q.spot, q.spotAlt = q.spotAlt, q.spot end
                     end
                 end
             end
@@ -204,6 +212,12 @@ function R.TurnedIn(id, xp)
     xp = tonumber(Plain(xp))
     if xp and xp > 0 then q.xpDone = xp end
     q.done = (q.done or 0) + 1
+end
+
+-- Out of your log (abandoned, or handed in): its objectives are not followed any more.
+function R.Removed(id)
+    id = tonumber(Plain(id))
+    if id then progress[id] = nil end
 end
 
 -- The quests already in your log at login are followed too, so their objectives count.
@@ -308,6 +322,7 @@ frame:RegisterEvent("QUEST_ACCEPTED")
 frame:RegisterEvent("QUEST_COMPLETE")
 frame:RegisterEvent("QUEST_TURNED_IN")
 frame:RegisterEvent("QUEST_LOG_UPDATE")
+frame:RegisterEvent("QUEST_REMOVED")
 
 local logTimer = false
 frame:SetScript("OnEvent", function(_, event, a1, a2, a3)
@@ -318,7 +333,7 @@ frame:SetScript("OnEvent", function(_, event, a1, a2, a3)
         store.v = VERSION
         store.quests = type(store.quests) == "table" and store.quests or {}
         rec = store.quests
-        -- The quest lists, from the installed quest-data addons (Build.lua); then, before Core.lua builds the
+        -- The quest lists, from the installed quest-data addons (Build.lua); then, before Route.lua builds the
         -- route at login, the shipped recordings and this account's own laid over them.
         ns.LoadQuests()
         R.Apply(ns.Recorded)
@@ -342,6 +357,8 @@ frame:SetScript("OnEvent", function(_, event, a1, a2, a3)
         R.Complete()
     elseif event == "QUEST_TURNED_IN" then
         R.TurnedIn(a1, a2)
+    elseif event == "QUEST_REMOVED" then
+        R.Removed(a1)
     elseif event == "QUEST_LOG_UPDATE" and not logTimer then
         -- It fires in bursts: look once, a moment later.
         if C_Timer and C_Timer.After then

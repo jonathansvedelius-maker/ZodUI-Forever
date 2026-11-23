@@ -17,6 +17,8 @@ for (const script of ["harness.lua", "races.lua"]) {
         .replace("@BUILD@", quote("Build.lua"))
         .replace("@REC@", quote("Recorded.lua"))
         .replace("@RECORDER@", quote("Recorder.lua"))
+        .replace("@ROUTE@", quote("Route.lua"))
+        .replace("@WINDOW@", quote("Window.lua"))
         .replace("@CORE@", quote("Core.lua"));
     if (lauxlib.luaL_loadbuffer(L, to_luastring(code), null, to_luastring(script)) !== lua.LUA_OK
         || lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) {

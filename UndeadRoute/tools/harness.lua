@@ -100,6 +100,8 @@ assert(load(@REC@, "Recorded.lua"))("UndeadRoute", ns)
 assert(load(@RECORDER@, "Recorder.lua"))("UndeadRoute", ns)
 local recorder = frames[#frames]
 assert(recorder.scripts.OnEvent, "the quest recorder listens to nothing")
+assert(load(@ROUTE@, "Route.lua"))("UndeadRoute", ns)
+assert(load(@WINDOW@, "Window.lua"))("UndeadRoute", ns)
 assert(load(@CORE@, "Core.lua"))("UndeadRoute", ns)
 ns.OnArrowTarget = function(t)
     if t then
@@ -203,7 +205,23 @@ say("banner: " .. plain(W.bannerMain.text))
 say("   sub: " .. plain(W.bannerSub.text))
 say("  sub2: " .. plain(W.bannerSub2.text))
 assert(not UndeadRouteTracker:IsShown(), "tracker still shown under the open window")
-say("tracker: " .. plain(UndeadRouteTracker.head.text) .. " / " .. plain(UndeadRouteTracker.body.text):gsub("\n", " / "))
+-- The tracker is not worked out while the window hides it: peek() gives it as it reads with the window closed.
+local function peek()
+    local was = W.shown -- the stub window fires no OnHide of its own, so a closed one is refreshed here too
+    W.shown = false
+    W.scripts.OnHide(W)
+    W.shown = was
+    if was then UndeadRouteTracker.shown = false end
+    return UndeadRouteTracker
+end
+do
+    local stale = UndeadRouteTracker.body.text
+    UndeadRouteTracker.body.text = "untouched"
+    fire("QUEST_LOG_UPDATE")
+    assert(UndeadRouteTracker.body.text == "untouched", "the hidden tracker was worked out under the open window")
+    UndeadRouteTracker.body.text = stale
+end
+say("tracker: " .. plain(peek().head.text) .. " / " .. plain(peek().body.text):gsub("\n", " / "))
 
 local function show(key, max)
     for i, s in ipairs(ns.Stages) do
@@ -296,7 +314,7 @@ for _, s in ipairs(ns.Stages) do
 end
 
 -- The arrow: next step on the recommended stage, following pick up -> objective -> hand in.
-local function trackerText() return plain(UndeadRouteTracker.body.text) end
+local function trackerText() return plain(peek().body.text) end
 assert(arrow and arrow.title:find("^Pick up: "), "no arrow to the first pickup")
 say("arrow 1: " .. arrow.title .. string.format("  map %d (%.3f, %.3f)", arrow.map, arrow.x, arrow.y))
 assert(trackerText():find("Next: " .. arrow.title, 1, true), "tracker does not name the next step")
@@ -423,7 +441,7 @@ do
         for _, r in ipairs(now.rows) do if r.shown and plain(r.text.text):find("2/8  Thing " .. a.id .. " slain", 1, true) then seen = true end end
         assert(seen, "objective counts not shown, count first, in the NOW box")
         -- The tracker carries the same counts, since it is what you look at while you play.
-        local body = plain(UndeadRouteTracker.body.text)
+        local body = plain(peek().body.text)
         assert(body:find("2/8  Thing " .. a.id .. " slain", 1, true), "objective counts not in the tracker: " .. body)
         assert(body:find("Done bit  - done", 1, true), "finished objective not marked done in the tracker")
         say("tracker objectives: " .. body:gsub("\n", " / "))
@@ -534,7 +552,7 @@ end
 
 -- Trainer reminder: set on the even level-ups above, raised in a capital, cleared at the trainer.
 assert(UndeadRouteDB.train == 30, "trainer reminder not set")
-assert(plain(UndeadRouteTracker.body.text):find("Train: new spells since level 30", 1, true), "tracker has no trainer line")
+assert(plain(peek().body.text):find("Train: new spells since level 30", 1, true), "tracker has no trainer line")
 zone, mapId = "Orgrimmar", 1454
 fire("ZONE_CHANGED_NEW_AREA")
 local trainAlert = false
@@ -735,6 +753,31 @@ do
     out = {}
     SlashCmdList.UNDEADROUTE("do nowhere at all")
     assert(not UndeadRouteDB.detour and told("matches"), "/route do with an unknown name")
+    -- A side branch leads the same way: /route follow, until /route back.
+    local was = level
+    level = 34
+    fire("PLAYER_LEVEL_UP", 34)
+    out = {}
+    SlashCmdList.UNDEADROUTE("follow nowhere at all")
+    assert(not UndeadRouteDB.detour and told("matches") and told("Desolace"), "/route follow with an unknown name")
+    out = {}
+    SlashCmdList.UNDEADROUTE("follow deso")
+    assert(UndeadRouteDB.detour == "desolace" and told("side branch: Desolace"), "/route follow did not start a side branch")
+    assert(plain(UndeadRouteTracker.head.text):find("Desolace", 1, true), "the tracker does not lead into the side branch: "
+        .. plain(UndeadRouteTracker.head.text))
+    assert(UndeadRoute.Status().stage:find("Desolace", 1, true), "the route does not lead into the side branch")
+    fire("ZONE_CHANGED_NEW_AREA")
+    assert(UndeadRouteDB.detour == "desolace", "a zone change ended the side branch")
+    SlashCmdList.UNDEADROUTE("") -- the window: its button ends it
+    assert(plain(W.bannerSub.text):find("Side branch: Desolace", 1, true), "banner: " .. plain(W.bannerSub.text))
+    SlashCmdList.UNDEADROUTE("")
+    out = {}
+    SlashCmdList.UNDEADROUTE("back")
+    assert(not UndeadRouteDB.detour and told("back on the route"), "/route back did not end the side branch")
+    assert(not told("Time to move on"), "leaving a side branch said Time to move on")
+    say("side branch: /route follow leads the tracker and arrow through Desolace")
+    level = was
+    fire("PLAYER_LEVEL_UP", was)
     out = {}
     UnitXPMax, IsInInstance, GetInstanceInfo, GetQuestLogRewardXP = nil, nil, nil, nil
     level = 60
@@ -858,7 +901,24 @@ do
     px = 40.5
     ns.ArrowTick(a)
     assert(arrow == nil or arrow.title ~= "Test spot", "a reached pin still holds the arrow")
-    say("arrow: 100 yds west turns a quarter left, ahead when facing it; a reached pin lets go")
+    -- The quick way to your place: UnitPosition, used once it has agreed with the place worked out from the map.
+    px = 50
+    ns.PinArrow({ map = mapId, x = 40, y = 50, title = "Quick spot", key = "quick" })
+    UnitPosition = function() return 1000 - 50 * 10, 1000 - px * 10, 0, 1 end
+    assert(math.abs(ns.ArrowTick(a) - 100) < 0.01, "the arrow is off while UnitPosition is being checked")
+    local mapAsks, pos = 0, C_Map.GetPlayerMapPosition
+    C_Map.GetPlayerMapPosition = function(...) mapAsks = mapAsks + 1 return pos(...) end
+    px = 45
+    local quick = ns.ArrowTick(a)
+    assert(mapAsks == 0, "the map is still asked for your place after UnitPosition agreed with it")
+    assert(math.abs(quick - 50) < 0.01 and plain(a.dist.text):find("50 yds", 1, true), "the quick way gives the wrong yards: " .. tostring(quick))
+    -- Where UnitPosition says nothing (an instance), the map is asked again.
+    UnitPosition = function() return nil end
+    assert(math.abs(ns.ArrowTick(a) - 50) < 0.01 and mapAsks > 0, "no place when UnitPosition gives none")
+    UnitPosition = nil
+    C_Map.GetPlayerMapPosition = pos
+    ns.PinArrow(nil)
+    say("arrow: 100 yds west turns a quarter left, ahead when facing it; a reached pin lets go; UnitPosition used once it agrees")
     C_Map.GetWorldPosFromMapPos, CreateVector2D, C_Map.GetPlayerMapPosition, GetPlayerFacing = savedWorld, savedVec, savedPos, nil
 end
 
@@ -895,6 +955,11 @@ do
     fire("QUEST_LOG_UPDATE")
     px, py, fulfilled = 0.62, 0.72, 2
     fire("QUEST_LOG_UPDATE")
+    -- One kill on another map (a cave, the next zone) is counted apart: the spot here stays.
+    local home = mapId
+    mapId, fulfilled = 9999, 3
+    fire("QUEST_LOG_UPDATE")
+    mapId = home
     px, py = 0.41, 0.51
     UnitName = function() return "Farmer Ray's Wife" end
     fire("QUEST_COMPLETE")
@@ -908,6 +973,8 @@ do
     assert(q.xp == 1450 and q.sides.H and q.races[5] and q.classes[2], "the recorder does not keep the XP and who took it")
     assert(q.obj and q.obj[1]:find("Bear killed", 1, true), "the recorder does not keep the objectives")
     assert(q.spot and q.spot[4] == 2 and math.abs(q.spot[2] / q.spot[4] - 61) < 0.01, "the recorder does not see where the work moved on")
+    assert(q.spot[1] == mapId and q.spotAlt and q.spotAlt[1] == 9999 and q.spotAlt[4] == 1,
+        "one objective on another map threw the work spot away")
     assert(q.turnin[2] == 41 and q.ender == "Farmer Ray's Wife" and q.done == 1, "the recorder does not keep the hand-in")
     for k, v in pairs(q) do
         assert(v ~= "Testchar" and k ~= "player" and k ~= "realm", "the recorder keeps who you are")
@@ -935,6 +1002,13 @@ do
     assert(not UndeadRouteRecordDB.quests[777002], "a paused recorder still records")
     SlashCmdList.UNDEADROUTE("record on")
     assert(not UndeadRouteRecordDB.off, "/route record on does not start it again")
+    -- A quest out of the log (abandoned) is not followed any more.
+    fire("QUEST_ACCEPTED", 777003)
+    fire("QUEST_REMOVED", 777003)
+    fulfilled = 4
+    fire("QUEST_LOG_UPDATE")
+    assert(not UndeadRouteRecordDB.quests[777003].spot, "an abandoned quest's objectives are still followed")
+    UndeadRouteRecordDB.quests[777003] = nil
     say("recorder: giver, place, level, rewards, objectives, work spot and hand-in kept, no names; laid over the data")
     -- Back as it was, for what follows.
     for k in pairs(g) do g[k] = nil end
@@ -1070,4 +1144,55 @@ assert(not mini.shown and UndeadRouteDB.minimap.hidden, "/route minimap does not
 SlashCmdList.UNDEADROUTE("minimap")
 assert(mini.shown, "/route minimap does not bring the button back")
 say("minimap button and addon menu: ok")
+-- Quest events are drawn on the next frame: a burst in one frame once, a burst over many frames every 0.1 s.
+do
+    local savedAfter, waits, now = C_Timer.After, {}, 100
+    GetTime = function() return now end
+    C_Timer.After = function(seconds, fn) waits[#waits + 1] = { seconds, fn } end
+    local route = events.scripts.OnEvent
+    local body = UndeadRouteTracker.body
+    W.shown = false
+    route(events, "QUEST_LOG_UPDATE") route(events, "QUEST_ACCEPTED", 1) route(events, "QUEST_LOG_UPDATE")
+    assert(#waits == 1 and waits[1][1] == 0, "a burst of quest events in one frame is not drawn once, on the next frame")
+    body.text, body.written = "untouched", nil -- written: a text is only set again when it changes
+    waits[1][2]()
+    assert(body.text ~= "untouched", "the next frame did not draw")
+    now = 100.03
+    route(events, "QUEST_LOG_UPDATE")
+    assert(#waits == 2 and math.abs(waits[2][1] - 0.07) < 1e-6, "a second draw within 0.1 s does not wait out the rest of it")
+    waits[2][2]()
+    C_Timer.After, GetTime = savedAfter, nil
+    say("draw: on the next frame, at most every 0.1 s")
+end
+
+-- Handing in the last quest of the stage you are on moves the route on, and says so (not only a level-up does).
+do
+    fire("PLAYER_LEVEL_UP", 25)
+    zone = "Nowhere"
+    fire("ZONE_CHANGED_NEW_AREA")
+    local st = UndeadRoute.Status()
+    local stage
+    for _, s in ipairs(ns.Stages) do
+        if s.kind == "zone" and s.zone == st.stage and s.min == st.min and s.max == st.max then stage = s end
+    end
+    assert(stage, "no stage to finish")
+    local last
+    for _, t in ipairs(stage.tasks) do
+        if t.id then completed[t.id] = true last = t.id end
+    end
+    out = {}
+    fire("ZONE_CHANGED_NEW_AREA")
+    assert(not told("Time to move on"), "a zone change announced a new stage")
+    -- lastRec follows the zone change, so set the stage open again, then hand in its last quest.
+    completed[last] = nil
+    inlog[last] = "complete"
+    fire("ZONE_CHANGED_NEW_AREA")
+    assert(UndeadRoute.Status().min == stage.min, "the stage did not open again")
+    inlog[last] = nil
+    completed[last] = true
+    out = {}
+    fire("QUEST_TURNED_IN", last)
+    assert(told("Time to move on"), "the stage's last hand-in did not say where to go next")
+    say("move on: said after the last hand-in of " .. stage.zone .. " " .. stage.min .. "-" .. stage.max)
+end
 say("ALL OK")

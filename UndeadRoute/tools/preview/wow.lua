@@ -1,6 +1,6 @@
 -- A WoW API for the browser preview. Unlike tools/harness.lua, whose widgets are empty
 -- shells, these keep their anchors, sizes, colours and text and draw them as HTML, so the
--- addon's own Core.lua lays out the window you see.
+-- addon's own code lays out the window you see.
 -- Only what the addon uses is implemented. A call to anything else does nothing and is
 -- named once in the panel's chat log.
 local js = require "js"

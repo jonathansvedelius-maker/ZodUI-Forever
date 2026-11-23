@@ -37,6 +37,10 @@ button and the arrow. `/route record` and `/route data` are above. `/route help`
 
 ## Development
 
+The addon's own code is three files, loaded in this order: `Route.lua` (the stage list and the route's logic, no
+frames), `Window.lua` (the window, the tracker, the arrow) and `Core.lua` (reminders, the minimap button, events and
+`/route`). They share no locals: the later two take what they use from `ns.I`.
+
 `node tools/run.js .` runs the tests against a stub of the WoW API. They use `Generated.lua`, a local copy of the quest
 list built by `node tools/lua.js tools/gen.lua "<WoW>/_forever_/Interface/AddOns" Generated.lua` from the addons
 installed on that machine; it is never shipped or committed. `node tools/icon.js` draws the icon and the arrow.

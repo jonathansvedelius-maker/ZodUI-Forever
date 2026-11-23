@@ -1,6 +1,6 @@
 local _, ns = ...
 
--- Every route, both factions, in one list. At login Core.lua keeps the stages for the character's
+-- Every route, both factions, in one list. At login Route.lua keeps the stages for the character's
 -- faction and race (ns.SelectRoute). One entry per stage:
 --   key     saved-variable key (never rename: ticks are stored under it). Two stages may share a key
 --           only when no character can get both (different factions or races).
@@ -240,6 +240,15 @@ ns.Stages = {
             { t = "An extra low-level zone: only worth the trip on a fresh character short of quests." },
         },
         note = "New in Forever: the Skyborne's starting island.",
+    },
+    {
+        key = "desolace", kind = "alt", faction = "Horde", maps = { 1443 }, zone = "Desolace", hub = "Ghost Walker Post", x = 56, y = 59,
+        min = 32, max = 40, src = "classic",
+        travel = "From Sun Rock Retreat ride south through the Charred Vale into Desolace. Ghost Walker Post is in the middle of the zone.",
+        tasks = {
+            { t = "Take the Shadowprey Village flight path on the south-west coast when the quests lead you there." },
+        },
+        note = "The centaur quests got better rewards in Forever. Maraudon is just north of Shadowprey.",
     },
     {
         key = "stv", kind = "alt", faction = "Horde", maps = { 1434 }, zone = "Stranglethorn Vale", hub = "Grom'gol Base Camp", x = 32, y = 28,
@@ -618,9 +627,10 @@ ns.Stages = {
     },
     {
         key = "desolace", kind = "alt", faction = "Alliance", maps = { 1443 }, zone = "Desolace", hub = "Nijel's Point", x = 66, y = 7,
-        min = 32, max = 38, src = "classic",
+        min = 32, max = 40, src = "classic",
         travel = "From Astranaar ride south-west through Stonetalon Mountains into Desolace. Take the Nijel's Point flight path.",
         tasks = {
+            { t = "Set your hearthstone in Nijel's Point." },
         },
     },
     {

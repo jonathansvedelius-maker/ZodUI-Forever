@@ -9,7 +9,7 @@
 --   ForeverLevelingBiS           quest reward items and their quality
 --   ForeverDungeonJournal        objectives and required items of class quest chains
 -- Quests of both factions and every race and class are kept, each tagged with who may take it
--- (side, race and class masks); Core.lua keeps this character's at login.
+-- (side, race and class masks); Route.lua keeps this character's at login.
 local root, out = arg[1], arg[2]
 
 local function auto() -- a table whose missing fields are tables too
