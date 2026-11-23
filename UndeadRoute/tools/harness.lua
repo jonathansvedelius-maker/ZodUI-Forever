@@ -768,6 +768,29 @@ do
     assert(UndeadRoute.Status().stage:find("Desolace", 1, true), "the route does not lead into the side branch")
     fire("ZONE_CHANGED_NEW_AREA")
     assert(UndeadRouteDB.detour == "desolace", "a zone change ended the side branch")
+    -- The choice is kept while the stage is out of reach for now (the game gives no level for a moment while
+    -- logging in or out): only done or outleveled ends it.
+    level = 20
+    fire("PLAYER_LEVEL_UP", 20)
+    assert(UndeadRouteDB.detour == "desolace", "a side branch was dropped while its stage read as not open yet")
+    assert(not plain(UndeadRouteTracker.head.text):find("Desolace", 1, true), "the tracker leads into a stage that is not open")
+    level = 34
+    fire("PLAYER_LEVEL_UP", 34)
+    assert(plain(UndeadRouteTracker.head.text):find("Desolace", 1, true), "the side branch does not lead again once in range")
+    -- Its tips are for arriving: with two of its quests handed in you have been there, and they are done.
+    do
+        local stage, tip, two = nil, nil, {}
+        for _, s in ipairs(ns.Stages) do if s.key == "desolace" then stage = s end end
+        for i, t in ipairs(stage.tasks) do
+            if not t.id then tip = tip or i elseif #two < 2 then two[#two + 1] = t.id end
+        end
+        assert(ns.I.TaskState(stage, tip, 34) == "do", "a tip of a stage you have not been to is not open")
+        completed[two[1]] = true
+        assert(ns.I.TaskState(stage, tip, 34) == "do", "one quest handed in already ticks a stage's tips")
+        completed[two[2]] = true
+        assert(ns.I.TaskState(stage, tip, 34) == "done", "the tips of a stage you have been to are still open")
+        completed[two[1]], completed[two[2]] = nil, nil
+    end
     SlashCmdList.UNDEADROUTE("") -- the window: its button ends it
     assert(plain(W.bannerSub.text):find("Side branch: Desolace", 1, true), "banner: " .. plain(W.bannerSub.text))
     SlashCmdList.UNDEADROUTE("")

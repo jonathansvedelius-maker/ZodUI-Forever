@@ -66,8 +66,13 @@ local function Plain(v) -- nil for a value the client hands back as secret
     return v
 end
 
+-- The game answers 0 (or nothing) for a moment while logging in or out: the last level it did give stands.
+local levelSeen
 local function Level()
-    return levelNow or Plain(UnitLevel("player")) or 1
+    if levelNow then return levelNow end
+    local v = Plain(UnitLevel("player"))
+    if type(v) == "number" and v > 0 then levelSeen = v end
+    return levelSeen or 1
 end
 
 local function HasBit(mask, n) -- is bit n (1 = lowest) set? Race masks pass 32 bits, so no bit library.
@@ -86,7 +91,7 @@ local memoDepth = 0
 local function Remember(on)
     if on then
         memoDepth = memoDepth + 1
-        if memoDepth == 1 then memo = { done = {}, inlog = {}, complete = {}, state = {} } end
+        if memoDepth == 1 then memo = { done = {}, inlog = {}, complete = {}, state = {}, started = {} } end
     else
         memoDepth = math.max(0, memoDepth - 1)
         if memoDepth == 0 then memo = nil end
@@ -750,6 +755,26 @@ local function TaskKey(stage, i)
     return task.id and ("q" .. task.id) or (stage.key .. ":" .. i)
 end
 
+-- Whether you have plainly been to a stage already: STARTED of its quests are handed in. Its tips (set your
+-- hearthstone, take the flight path) are for arriving, so they count as done from then on.
+local STARTED = 2
+local function Started(stage)
+    local kept = memo and memo.started
+    local v = kept and kept[stage]
+    if v == nil then
+        local n = 0
+        v = false
+        for _, task in ipairs(stage.tasks) do
+            if task.id and QuestDone(task.id) then
+                n = n + 1
+                if n >= STARTED then v = true break end
+            end
+        end
+        if kept then kept[stage] = v end
+    end
+    return v
+end
+
 -- "done", "inlog", "skipped" (you clicked it away), "closed" (no longer offered), "locked" (a quest before it is not
 -- handed in), "later" (too high yet), "low" (6+ levels under you: little XP) or "do".
 local function TaskStateNow(stage, i, level)
@@ -765,6 +790,7 @@ local function TaskStateNow(stage, i, level)
         return "do"
     end
     if db.tasks[TaskKey(stage, i)] then return "done" end
+    if Started(stage) then return "done" end -- a tip for arriving, and you have been there
     if task.lv and level >= task.lv + 6 then return "low" end
     if task.lv and task.lv > level + 3 then return "later" end
     return "do"
@@ -792,8 +818,10 @@ local function Status(stage, level)
         if task.id then quests = quests + 1 end
     end
     for i, task in ipairs(stage.tasks) do
-        local ts = TaskState(stage, i, level)
-        if (quests == 0 or task.id) and ts ~= "done" and ts ~= "closed" and ts ~= "skipped" then all = false break end
+        if quests == 0 or task.id then -- with quests, the tips do not count (and are not worked out here)
+            local ts = TaskState(stage, i, level)
+            if ts ~= "done" and ts ~= "closed" and ts ~= "skipped" then all = false break end
+        end
     end
     if all then return "done" end
     if stage.kind == "class" or stage.kind == "city" then return "now" end
@@ -807,22 +835,33 @@ local function Status(stage, level)
 end
 
 -- A detour ("Do it now" on a dungeon): the route leads to that dungeon until its quests are handed in, you
--- outlevel it, or you are back out of it with nothing to hand in. Returns the stage while it lasts.
+-- outlevel it, or you are back out of it with nothing to hand in. A side branch (/route follow) is one too, and
+-- lasts until its quests are done or you outlevel it. Returns the stage while it lasts.
+-- Only "done" and "out" end it: a stage that reads "soon" is kept, since the game can give no level for a
+-- moment while logging in or out, and the choice must not be lost to that.
 local function Detour(level)
     local key = db.detour
     if not key then return end
+    local why
     for _, stage in ipairs(ns.Stages) do
         if stage.key == key then
-            if Status(stage, level) ~= "now" then break end
-            if not db.detourRan then return stage end
-            for _, task in ipairs(stage.tasks) do
-                if task.id and InLog(task.id) and Complete(task.id) then return stage end -- hand-ins left
+            local st = Status(stage, level)
+            if st == "soon" then return end
+            local name = (stage.kind == "dungeon") and stage.hub or stage.zone
+            if st == "now" then
+                if not db.detourRan then return stage end
+                for _, task in ipairs(stage.tasks) do
+                    if task.id and InLog(task.id) and Complete(task.id) then return stage end -- hand-ins left
+                end
+                why = name .. ": the run is over"
+            else
+                why = name .. ((st == "done") and " is done" or " is below your level now")
             end
             break
         end
     end
     db.detour, db.detourIn, db.detourRan = nil, nil, nil
-    Print("back on the route.")
+    Print("back on the route" .. (why and (" (" .. why .. ")") or "") .. ".")
 end
 
 -- The main-route stage to be in now: a dungeon you are on a detour to, else the one for the zone you are
