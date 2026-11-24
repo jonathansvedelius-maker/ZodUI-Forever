@@ -1416,7 +1416,7 @@ end
 function RefreshTracker()
     local t = tracker
     -- The window shows all of this and more, and the two overlap: one at a time.
-    local hidden = db.tracker.hidden or (main and main:IsShown()) or false
+    local hidden = db.tracker.hidden or (main and main:IsShown()) or (ns.GuideShown and ns.GuideShown()) or false
     t:SetShown(not hidden)
     if hidden then return end -- nothing to work out for a tracker nobody sees; closing the window refreshes it
     local level, rec = Level(), Recommend()
@@ -1670,6 +1670,7 @@ end
 local function Draw()
     if ns.ready then UpdateArrow() end
     if main and main:IsShown() then RefreshMain() end
+    if ns.RefreshGuide then ns.RefreshGuide() end
     if tracker then RefreshTracker() end
 end
 
@@ -1709,7 +1710,7 @@ I.PinAt, I.BuildTracker, I.RefreshTracker, I.Refresh = PinAt, BuildTracker, Refr
 -- The stage the window shows (nil: the recommended one, the next time it is drawn).
 function I.Select(stage) selected = stage end
 
-function I.WindowShown() return main ~= nil and main:IsShown() end
+function I.WindowShown() return (main ~= nil and main:IsShown()) or (ns.GuideShown ~= nil and ns.GuideShown()) end
 
 -- In a fight the tracker steps back: faint, and the clicks go through it to the world, so it is
 -- not dragged away by accident.

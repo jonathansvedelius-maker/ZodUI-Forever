@@ -584,6 +584,8 @@ SlashCmdList["UNDEADROUTE"] = function(msg)
     msg = (msg or ""):lower():match("^%s*(.-)%s*$")
     if msg == "record" or msg:find("^record ") then
         ns.Recorder.Slash(msg:match("^record%s*(.-)$"), Print)
+    elseif msg == "guide" then
+        ns.ToggleGuide()
     elseif msg == "data" then
         ns.Recorder.Data(Print)
     elseif msg == "minimap" then
@@ -699,7 +701,7 @@ SlashCmdList["UNDEADROUTE"] = function(msg)
             Print("text is " .. (db.font or 2) .. " pixels over the default. /route font 0 to 6 changes it.")
         end
     elseif msg == "help" then
-        Print("/route opens the window. /route dungeons ranks the dungeons worth doing now. /route do <name> pauses the route for one, /route follow <zone> does the same for a side branch, /route back ends it. "
+        Print("/route opens the window. /route guide opens the new step-by-step guide. /route dungeons ranks the dungeons worth doing now. /route do <name> pauses the route for one, /route follow <zone> does the same for a side branch, /route back ends it. "
             .. "/route tracker shows or hides the small panel. /route minimap hides or shows the minimap button. /route record says what the quest recorder has kept (off/on pauses it). /route data says where the quest list comes from. /route arrow turns the arrow to the next step on or off (drag it to move it). "
             .. "/route font 0 to 6 sets the text size. "
             .. "/route reset clears your ticks and reminders. "

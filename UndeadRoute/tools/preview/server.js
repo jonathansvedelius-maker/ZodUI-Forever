@@ -35,7 +35,49 @@ function toc() {
             info.files.push(line.replace(/\\/g, "/"));
         }
     }
+    // The tests' local quest list (Generated.lua, never shipped) stands in for what Build.lua makes at login from
+    // the quest addons, which the browser has not got: loaded right after Build.lua, as tools/harness.lua does.
+    const build = info.files.indexOf("Build.lua");
+    if (build >= 0 && fs.existsSync(path.join(addonDir, "Generated.lua"))) info.files.splice(build + 1, 0, "Generated.lua");
     return info;
+}
+
+// The game's textures are TGA, which no browser shows: an uncompressed 24/32-bit one is handed out as a PNG.
+const zlib = require("zlib");
+const CRC = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+});
+function crc32(buf) {
+    let c = 0xffffffff;
+    for (const b of buf) c = CRC[(c ^ b) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+}
+function chunk(type, data) {
+    const len = Buffer.alloc(4), crc = Buffer.alloc(4), td = Buffer.concat([Buffer.from(type), data]);
+    len.writeUInt32BE(data.length);
+    crc.writeUInt32BE(crc32(td));
+    return Buffer.concat([len, td, crc]);
+}
+function tgaToPng(tga) {
+    const idLen = tga[0], type = tga[2], w = tga.readUInt16LE(12), h = tga.readUInt16LE(14), bpp = tga[16], desc = tga[17];
+    if (type !== 2 || (bpp !== 32 && bpp !== 24)) throw new Error("only uncompressed 24/32-bit TGA is shown");
+    const top = (desc & 0x20) !== 0, step = bpp / 8, start = 18 + idLen;
+    const raw = Buffer.alloc((w * 4 + 1) * h);
+    for (let y = 0; y < h; y++) {
+        const sy = top ? y : h - 1 - y;
+        raw[y * (w * 4 + 1)] = 0;
+        for (let x = 0; x < w; x++) {
+            const s = start + (sy * w + x) * step, d = y * (w * 4 + 1) + 1 + x * 4;
+            raw[d] = tga[s + 2]; raw[d + 1] = tga[s + 1]; raw[d + 2] = tga[s]; raw[d + 3] = step === 4 ? tga[s + 3] : 255;
+        }
+    }
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4);
+    ihdr[8] = 8; ihdr[9] = 6;
+    return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr),
+        chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
 }
 
 function send(res, status, body, type) {
@@ -65,6 +107,14 @@ http.createServer((req, res) => {
             const rel = url.slice(7);
             if (!toc().files.includes(rel)) return send(res, 404, "Not in the .toc: " + rel);
             return file(res, path.join(addonDir, rel));
+        }
+        // A texture of the addon's Media folder, by its path without extension: /media/Guide/Frame
+        if (url.startsWith("/media/")) {
+            const rel = url.slice(7).replace(/\.(tga|png)$/i, "");
+            const media = path.join(addonDir, "Media");
+            const full = path.resolve(media, rel + ".tga");
+            if (!full.startsWith(media + path.sep) || !fs.existsSync(full)) return send(res, 404, "No texture: " + rel);
+            return send(res, 200, tgaToPng(fs.readFileSync(full)), "image/png");
         }
         if (url.startsWith("/fonts/")) {
             const name = path.basename(url);

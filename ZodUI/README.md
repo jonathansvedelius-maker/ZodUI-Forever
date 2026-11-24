@@ -66,6 +66,7 @@ ZodUI runs on its own. Two parts need another addon and do nothing without it; t
 | Story | Your character's life day by day: levels, first visits, dungeons and who came along, deaths, good finds, new standings. `/zod story`, `/zod story export` | on |
 | Guild network | ZodUI in your guild talks to each other: rares and world bosses someone sees in your zone (`/zod guild rares`, `/zod guild way`), who else has a quest (`/zod guild quest`), who runs ZodUI (`/zod guild`) | on |
 | Game settings | A few of the game's own settings, put back when unticked | off |
+| Object glow | A pillar of light on quest objects (gold) and chests (blue) near you, so you don't walk past them; the game shows one object at a time. `/zod spotter test` | off |
 
 A module starts switched off when an installed addon already does its job: the Info bar and Invites next to NaowhForever_QoL, and Vendor next to NaowhForever_QoL or EllesmereUIQoL. Settings says so on that module's page, and you can switch it on anyway. The two item-count lines in tooltips start unticked next to NaowhForever_QoL for the same reason.
 

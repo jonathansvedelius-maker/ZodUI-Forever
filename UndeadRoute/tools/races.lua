@@ -5,7 +5,8 @@ local DATA = assert(load(@DATA@, "Data.lua"))
 local GEN = assert(load(@GEN@, "Generated.lua"))
 -- The addon's own three files, in the .toc's order.
 local ROUTE, WINDOW, WIRING = assert(load(@ROUTE@, "Route.lua")), assert(load(@WINDOW@, "Window.lua")), assert(load(@CORE@, "Core.lua"))
-local function CORE(...) ROUTE(...) WINDOW(...) WIRING(...) end
+local GUIDE = assert(load(@GUIDE@, "Guide.lua"))
+local function CORE(...) ROUTE(...) WINDOW(...) GUIDE(...) WIRING(...) end
 
 local say = function(s) io.write(s .. "\n") end
 local function plain(s) return ((s or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end

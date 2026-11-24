@@ -155,14 +155,14 @@ for _, m in ipairs(ns.order) do on[m.key] = m.enabled end
 for _, key in ipairs({ "session", "history", "goals", "remind", "loot", "runs", "gold", "alts", "items", "notes", "tooltip", "chat", "alerts", "rep" }) do
     check(on[key] == true, key .. " starts on")
 end
-for _, key in ipairs({ "vendor", "databar", "social", "tweaks" }) do
+for _, key in ipairs({ "vendor", "databar", "social", "tweaks", "spotter" }) do
     check(on[key] == false, key .. " starts off")
 end
 check(ns.modules.databar.db.conflict == "NaowhForever_QoL", "the info bar is off because of the other addon, and says so")
 check(ns.modules.chat.db.conflict == nil, "chat has no conflict here")
 check(ns.modules.vendor.db.conflict == "NaowhForever_QoL" and ns.modules.vendor.db.recheck == 1, "vendor is off because NaowhForever_QoL sells grey items too")
 check(ZodUIMinimapButton and ZodUIMinimapButton:IsShown(), "minimap button shown")
-check(ZodUIMinimapButton.icon.texture == "Interface\\AddOns\\ZodUI\\Media\\Logo", "the minimap button shows the logo")check(#ns.order == 49, "49 modules, got " .. #ns.order)
+check(ZodUIMinimapButton.icon.texture == "Interface\\AddOns\\ZodUI\\Media\\Logo", "the minimap button shows the logo")check(#ns.order == 50, "50 modules, got " .. #ns.order)
 do
     -- A setup from before a module gained a conflict: it was on, and recheck asks once more.
     ns.db.modules.recheckdemo = { enabled = true }
@@ -608,6 +608,81 @@ W.combat = false
 fire("PLAYER_REGEN_ENABLED")
 check(W.cvars.autoLootDefault == "1", "it is applied when combat ends")
 slash("tweaks off")
+
+---------------------------------------------------------------------------
+say("--- object glow")
+do
+    local S = ns.modules.spotter
+    reset()
+    W.cvars.SoftTargetInteract, W.cvars.SoftTargetInteractRange, W.cvars.nameplateMaxDistance = "0", "10.000000", "60"
+    W.cvars.SoftTargetIconGameObject, W.cvars.SoftTargetIconInteract, W.cvars.SoftTargetInteractArc = "0", "0", "0"
+    check(called("SetCVar") == 0, "nothing is changed while the module is off")
+    slash("spotter on")
+    check(W.cvars.SoftTargetInteract == "3" and W.cvars.SoftTargetIconGameObject == "1" and W.cvars.SoftTargetInteractArc == "2"
+        and W.cvars.SoftTargetInteractRange == "30", "switching it on turns on the game's interact target, all around, 30 yards")
+    check(W.cvars.nameplateMaxDistance == "60", "a plate distance already farther is left alone")
+    check(S.IsChest("Battered Chest") and S.IsChest("Solid Strongbox") and S.IsChest("Dented Footlocker")
+        and not S.IsChest("Chestnut Tree") and not S.IsChest("Mailbox"), "chests are known by their name, not by part of a word")
+    check(S.ObjectID("GameObject-0-1-2-3-2843-0000AB") == 2843 and S.ObjectID("Creature-0-1-2-3-55-0") == nil,
+        "the object's ID comes from its GUID")
+    local plate = CreateFrame("Frame", nil, UIParent)
+    local function target(guid, name)
+        W.guids = W.guids or {}
+        W.units = W.units or {}
+        W.guids.softinteract, W.units.softinteract = guid, name
+        W.objects = { softinteract = guid ~= nil }
+        W.plates = { softinteract = guid and plate or nil }
+        fire("PLAYER_SOFT_INTERACT_CHANGED")
+    end
+    target("GameObject-0-1-2-3-2843-0000AB", "Battered Chest")
+    check(S.shown == "chest" and called("PlaySound") == 1, "a chest glows, with a sound")
+    target(nil, nil)
+    check(S.shown == nil, "the glow goes when the game picks nothing")
+    target("GameObject-0-1-2-3-2843-0000AB", "Battered Chest")
+    check(S.shown == "chest" and called("PlaySound") == 1, "the same chest again: no second sound")
+    target("GameObject-0-1-2-3-1617-0000AC", "Mailbox")
+    check(S.shown == nil, "an ordinary object gets only the game's icon")
+    slash("spotter test")
+    check(S.shown == "test" and called("PlaySound") == 1 and printed("every object near you lights up now"), "/zod spotter test lights up any object, silently, to try the look")
+    slash("spotter test")
+    check(S.shown == nil and printed("test over"), "and again to stop")
+    W.questLog = { { title = "Grain Gathering", questID = 77, objectives = { { text = "Sack of Grain: 1/5", finished = false } } } }
+    S:OnOption("quest") -- the log is read again (QUEST_LOG_UPDATE would wake the quest notices too)
+    target("GameObject-0-1-2-3-900-0000AD", "Sack of Grain")
+    check(S.shown == "quest" and called("PlaySound") == 2, "an object an unfinished objective names glows as a quest object")
+    QuestieLoader = { ImportModule = function(_, name)
+        return name == "QuestieTooltips" and { lookupByKey = { o_1234 = { ["5_1"] = true } } } or nil end }
+    target("GameObject-0-1-2-3-1234-0000AE", "Odd Rock")
+    check(S.shown == "quest", "an object Questie lists for a quest glows")
+    QuestieLoader = nil
+    ns.modules.spotter.db.quest = false
+    S:OnOption("quest")
+    check(S.shown == nil, "quest objects can be left out")
+    ns.modules.spotter.db.quest = true
+    W.questLog = nil
+    S:OnOption("quest") -- the log is read again (QUEST_LOG_UPDATE would wake the quest notices too)
+    -- Codex Forever puts a setting back when its search ends: it is set again
+    W.cvars.SoftTargetInteract = "0"
+    pump(1.2)
+    check(W.cvars.SoftTargetInteract == "3", "a setting another addon put back is set again")
+    W.cvars.SoftTargetInteractArc = "1" -- you chose another value yourself
+    pump(1.2)
+    check(W.cvars.SoftTargetInteractArc == "1", "a value you chose yourself is kept")
+    S.db.range = 40
+    S:OnOption("range")
+    check(W.cvars.SoftTargetInteractRange == "40", "the distance follows the setting")
+    W.combat = true
+    slash("spotter off")
+    check(W.cvars.SoftTargetInteract == "3", "nothing is changed in combat")
+    slash("spotter test")
+    check(printed("Object glow is off"), "the test asks to switch the module on first")
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    check(W.cvars.SoftTargetInteract == "0" and W.cvars.SoftTargetInteractRange == "10.000000" and W.cvars.SoftTargetInteractArc == "1"
+        and next(S.db.was) == nil,
+        "switching it off puts the game's settings back, but not one you changed yourself")
+    W.guids.softinteract, W.units.softinteract, W.objects, W.plates = nil, nil, nil, nil
+end
 check(W.cvars.autoLootDefault == "0", "switching the module off restores the game's settings")
 
 ---------------------------------------------------------------------------

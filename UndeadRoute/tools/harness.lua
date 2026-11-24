@@ -12,7 +12,7 @@ local function Widget()
         if k == "GetFont" then return function(self) return "Font", rawget(self, "fsize") or 10, "" end end
         if k == "SetFont" then return function(self, _, size) self.fsize = size end end
         if k == "GetStringHeight" then return function() return 12 end end
-        if k == "GetHeight" then return function(self) return self.h or 100 end end
+        if k == "GetHeight" then return function(self) return rawget(self, "h") or 100 end end
         if k == "SetHeight" then return function(self, h) self.h = h end end
         if k == "GetVerticalScroll" then return function() return 0 end end
         if k == "Show" then return function(self) self.shown = true end end
@@ -102,6 +102,7 @@ local recorder = frames[#frames]
 assert(recorder.scripts.OnEvent, "the quest recorder listens to nothing")
 assert(load(@ROUTE@, "Route.lua"))("UndeadRoute", ns)
 assert(load(@WINDOW@, "Window.lua"))("UndeadRoute", ns)
+assert(load(@GUIDE@, "Guide.lua"))("UndeadRoute", ns)
 assert(load(@CORE@, "Core.lua"))("UndeadRoute", ns)
 ns.OnArrowTarget = function(t)
     if t then
@@ -896,6 +897,77 @@ do
     out = {}
 end
 
+-- Walking order from where you stand: the nearest giver of the open batch first, the nearest objective camp,
+-- and a camp two quests in your log share before a lone one about as far. Two of the batch's quests are moved
+-- to known spots for it, and put back after.
+do
+    local I = ns.I
+    local rec, plan -- a stage whose open batch has two quests to pick up
+    for _, stage in ipairs(ns.Stages) do
+        local p = stage.kind == "zone" and I.CurrentBatch(stage)
+        if p and #p.pickup >= 2 and not rec then rec, plan = stage, p end
+    end
+    assert(rec, "no open batch with two quests to pick up to test the walking order")
+    local a, b = plan.pickup[1].task, plan.pickup[2].task
+    local map = a.zmap
+    local saved = {}
+    for _, t in ipairs({ a, b }) do
+        saved[t] = { map = t.map, x = t.x, y = t.y, zmap = t.zmap, spot = t.quest.spot, camps = t.quest.camps }
+        t.map, t.zmap = map, map
+    end
+    local savedMap, savedPos, savedFocus = mapId, C_Map.GetPlayerMapPosition, UndeadRouteDB.focus
+    UndeadRouteDB.focus = nil
+    mapId = map
+    local px, py = 0, 0
+    C_Map.GetPlayerMapPosition = function() return { GetXY = function() return px / 100, py / 100 end } end
+    local function standAt(x, y) px, py = x, y end
+    -- Givers at (20, 20) and (80, 80): whichever you stand by comes first, in the arrow and in the guide's order.
+    a.x, a.y, b.x, b.y = 20, 20, 80, 80
+    standAt(78, 80)
+    local step = I.NextStep(rec)
+    assert(step and step.kind == "pickup" and step.id == b.id, "the nearest giver is not first: " .. tostring(step and step.title))
+    local sorted = I.WalkSort(rec, level, plan.pickup, "pickup")
+    assert(sorted[1].task == b, "the guide's pick-ups are not nearest first")
+    standAt(22, 20)
+    step = I.NextStep(rec)
+    assert(step and step.id == a.id, "standing by the other giver does not make it first: " .. tostring(step and step.title))
+    say("nearest giver: " .. step.title)
+    -- A in the log, its objectives at two camps: the arrow goes to the camp you stand nearer.
+    inlog[a.id] = true
+    a.quest.camps, a.quest.spot = { { 10, 10 }, { 50, 50 } }, { 30, 30 }
+    UndeadRouteDB.focus = a.id -- the batch's other pick-up aside
+    standAt(12, 10)
+    step = I.NextStep(rec)
+    assert(step.kind == "work" and step.x == 10 and step.y == 10, "not the nearest camp: " .. step.x .. ", " .. step.y)
+    standAt(48, 50)
+    step = I.NextStep(rec)
+    assert(step.x == 50 and step.y == 50, "the arrow does not move on to the camp now nearer: " .. step.x .. ", " .. step.y)
+    -- B in the log too, its work by A's far camp: from halfway, the shared camp wins, as one step for both.
+    inlog[b.id] = true
+    b.quest.camps, b.quest.spot = nil, { 52, 51 }
+    standAt(30, 30)
+    step = I.NextStep(rec)
+    assert(step.x == 50 and step.y == 50, "the shared camp does not win from halfway: " .. step.x .. ", " .. step.y)
+    assert(step.title:find(" + ", 1, true), "two quests at one camp are not one step: " .. step.title)
+    local sharedTitle = step.title
+    -- Close by the lone camp, the lone camp still comes first.
+    standAt(11, 10)
+    step = I.NextStep(rec)
+    assert(step.x == 10 and step.y == 10, "a shared camp far away beats the camp you stand at")
+    say("camps: nearest first, a shared camp first from halfway: " .. sharedTitle)
+    -- Without your spot, the shared camp.
+    C_Map.GetPlayerMapPosition = nil
+    step = I.NextStep(rec)
+    assert(step.x == 50 and step.y == 50, "without your spot the shared camp does not win")
+    inlog[a.id], inlog[b.id] = nil, nil
+    for t, s in pairs(saved) do
+        t.map, t.x, t.y, t.zmap, t.quest.spot, t.quest.camps = s.map, s.x, s.y, s.zmap, s.spot, s.camps
+    end
+    mapId, C_Map.GetPlayerMapPosition, UndeadRouteDB.focus = savedMap, savedPos, savedFocus
+    fire("QUEST_LOG_UPDATE")
+    out = {}
+end
+
 -- The arrow: it turns towards the place from where you face, and says how far it is, in yards.
 do
     local a = UndeadRouteArrow
@@ -1217,5 +1289,59 @@ do
     fire("QUEST_TURNED_IN", last)
     assert(told("Time to move on"), "the stage's last hand-in did not say where to go next")
     say("move on: said after the last hand-in of " .. stage.zone .. " " .. stage.min .. "-" .. stage.max)
+end
+
+-- The guide (/route guide): the stage as one list of steps, the one you are on marked, and it moves on as you play.
+do
+    SlashCmdList.UNDEADROUTE("guide")
+    local G = UndeadRouteGuide
+    assert(G and G.shown, "/route guide did not open the guide")
+    assert(G.title.text and G.title.text ~= "", "the guide has no title")
+    local rows = 0
+    for _, r in ipairs(G.list.rows) do
+        if r.shown then
+            rows = rows + 1
+            assert(r.title.text and r.title.text ~= "", "a step without a text")
+        end
+    end
+    assert(rows > 0, "the guide lists no steps")
+    assert(plain(G.stepText.text):match("^Step %d+ of " .. rows .. "$"), "the step count is wrong: " .. G.stepText.text)
+    -- A quest picked up: its pick-up step is done, and the guide moves on from it.
+    local step = G.activeStep
+    assert(step, "no step is marked as the one you are on")
+    if step.kind == "pickup" then
+        local id = step.task.id
+        inlog[id] = true
+        fire("QUEST_ACCEPTED", id)
+        fire("QUEST_LOG_UPDATE")
+        local now = G.activeStep
+        assert(not (now and now.task.id == id and now.kind == "pickup"), "a quest in the log is still to be picked up")
+        inlog[id] = nil
+        fire("QUEST_LOG_UPDATE")
+    end
+    assert(UndeadRouteTracker == nil or not UndeadRouteTracker.shown, "the tracker shows while the guide is open")
+    SlashCmdList.UNDEADROUTE("guide")
+    assert(not G.shown, "/route guide did not close the guide")
+    say("guide: " .. rows .. " steps for " .. plain(G.title.text) .. ", moves on after a pick-up (" .. step.kind .. " first)")
+    -- The looks: the gear's menu steps through them, the guide built again in each, open and filled, back to Classic.
+    SlashCmdList.UNDEADROUTE("guide")
+    local seen = {}
+    for _ = 1, 5 do
+        local g = UndeadRouteGuide
+        local item
+        for _, it in ipairs(g.settings.items) do
+            if it.label():find("^Look: ") then item = it end
+        end
+        assert(item, "no look to pick in the gear's menu")
+        seen[#seen + 1] = item.label():sub(7)
+        item.scripts.OnClick(item)
+        local now = UndeadRouteGuide
+        assert(now ~= g and now.shown and not g.shown, "picking a look did not build the guide again in its place")
+        assert(now.title.text and now.title.text ~= "" and now.list.rows[1] and now.list.rows[1].shown,
+            "the guide in a new look is empty")
+    end
+    assert(UndeadRouteDB.guide.theme == "Classic" and #seen == 5, "five picks did not come back to Classic")
+    SlashCmdList.UNDEADROUTE("guide")
+    say("looks: " .. table.concat(seen, ", "))
 end
 say("ALL OK")

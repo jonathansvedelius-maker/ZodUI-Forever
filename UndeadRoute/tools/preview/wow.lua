@@ -60,9 +60,9 @@ end
 local function IsText(r) return r.kind == "FontString" end
 
 local Resolve
-local function TextWidth(r) return math.ceil(H:measureW(r.text or "", r.size, r.spacing or 0)) end
+local function TextWidth(r) return math.ceil(H:measureW(r.text or "", r.size, r.spacing or 0, r.font or "")) end
 local function TextHeight(r, width)
-    return H:measureH(r.text or "", r.size, width or 0, r.wrap ~= false, r.spacing or 0)
+    return H:measureH(r.text or "", r.size, width or 0, r.wrap ~= false, r.spacing or 0, r.font or "")
 end
 
 Resolve = function(r)
@@ -181,8 +181,8 @@ function M:GetCenter()
     return r.l + r.w / 2, H.h - (r.t + r.h / 2)
 end
 function M:GetEffectiveScale() return 1 end
-function M:GetFont() return "Fonts\\FRIZQT__.TTF", self.size, "" end
-function M:SetFont(_, size) self.size = size self.dirty = true gen = gen + 1 end
+function M:GetFont() return self.font or "Fonts\\FRIZQT__.TTF", self.size, "" end
+function M:SetFont(path, size) self.font, self.size, self.dirty = path, size, true gen = gen + 1 end
 function M:SetTextColor(r, g, b, a) self.color = { r, g, b, a or 1 } self.dirty = true end
 function M:SetWordWrap(w) self.wrap = w and true or false self.dirty = true gen = gen + 1 end
 function M:SetSpacing(s) self.spacing = s self.dirty = true gen = gen + 1 end
@@ -198,6 +198,20 @@ function M:SetVertexColor(r, g, b, a) self.vertex = { r, g, b, a or 1 } self.dir
 function M:SetColorTexture(r, g, b, a)
     self.texture, self.vertex, self.dirty = "Interface\\Buttons\\WHITE8x8", { r, g, b, a or 1 }, true
 end
+-- The part of the image shown: left, right, top, bottom (0-1).
+function M:SetTexCoord(l, r, t, b)
+    self.coord = (l == 0 and r == 1 and t == 0 and b == 1) and "" or string.format("%g %g %g %g", l, r, t, b)
+    self.dirty = true
+end
+-- The modern form: SetGradient("HORIZONTAL" or "VERTICAL", CreateColor(...), CreateColor(...)).
+function M:SetGradient(orient, a, b)
+    if type(a) ~= "table" or type(b) ~= "table" then return end
+    self.grad = string.format("%s %g %g %g %g %g %g %g %g", orient, a.r, a.g, a.b, a.a or 1, b.r, b.g, b.b, b.a or 1)
+    self.dirty = true
+end
+function M:SetBlendMode(m) self.blend = m self.dirty = true end
+function M:SetRotation(rad) self.rot = rad self.dirty = true end
+function M:SetDesaturated() end
 
 -- Frames ---------------------------------------------------------------
 
@@ -247,10 +261,10 @@ local function Push(r)
     if r.kind == "FontString" then
         local c = r.color
         H:text(r.id, r.text or "", r.size, c[1], c[2], c[3], r.wrap ~= false, r.spacing or 0, r.w ~= nil,
-            r.justify or "LEFT")
+            r.justify or "LEFT", r.font or "")
     elseif r.kind == "Texture" then
         local v = r.vertex or { 1, 1, 1, 1 }
-        H:texture(r.id, r.texture or "", v[1], v[2], v[3], v[4])
+        H:texture(r.id, r.texture or "", v[1], v[2], v[3], v[4], r.coord or "", r.grad or "", r.blend or "", r.rot or 0)
     elseif r.backdrop then
         local b, e = r.bg or { 0, 0, 0, 0 }, r.edge or { 0, 0, 0, 0 }
         H:backdrop(r.id, b[1], b[2], b[3], b[4], e[1], e[2], e[3], e[4])
@@ -292,6 +306,9 @@ local RACES = { Orc = { "Orc", 2, "Horde" }, Scourge = { "Undead", 5, "Horde" },
     Gnome = { "Gnome", 7, "Alliance" }, HighOrderSkyborne = { "High Order Skyborne", 95, "Alliance" } }
 
 UIParent = New("Frame", nil, 0)
+function CreateColor(r, g, b, a)
+    return { r = r, g = g, b = b, a = a or 1, GetRGBA = function(c) return c.r, c.g, c.b, c.a end }
+end
 UISpecialFrames = {}
 SlashCmdList = {}
 tinsert, tremove, wipe = table.insert, table.remove, function(t) for k in pairs(t) do t[k] = nil end return t end

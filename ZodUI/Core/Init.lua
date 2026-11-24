@@ -10,7 +10,7 @@ local ADDON, ns = ...
 -- guarded, and what went wrong is kept for /zod errors.
 
 ZodUI = ns
-ns.version = "0.65.1"
+ns.version = "0.66.0"
 ns.modules = {} -- by key
 ns.order = {} -- in load order, which is the order Settings lists them
 ns.errors = {}

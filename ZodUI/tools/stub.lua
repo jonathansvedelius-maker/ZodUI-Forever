@@ -46,7 +46,7 @@ local REGION = "SetPoint ClearAllPoints SetAllPoints GetPoint SetSize SetWidth S
     .. "IsVisible GetParent SetAlpha GetAlpha IsMouseOver GetCenter GetLeft GetTop "
 local FRAME = REGION .. "SetScript GetScript HookScript RegisterEvent UnregisterEvent CreateFontString CreateTexture SetFrameStrata SetFrameLevel GetFrameLevel "
     .. "EnableMouse IsMouseEnabled EnableMouseWheel SetMovable SetClampedToScreen RegisterForDrag StartMoving StopMovingOrSizing GetEffectiveScale "
-    .. "SetScale GetScale CreateAnimationGroup IsEventRegistered SetClipsChildren CreateLine "
+    .. "SetScale GetScale CreateAnimationGroup IsEventRegistered SetClipsChildren CreateLine SetParent "
 local METHODS = {
     Frame = Set(FRAME),
     Button = Set(FRAME .. "RegisterForClicks SetAttribute GetAttribute"),
@@ -55,7 +55,7 @@ local METHODS = {
     GameTooltip = Set(FRAME .. "SetOwner AddLine AddDoubleLine"),
     FontString = Set(REGION .. "SetText GetText SetFont GetFont SetTextColor GetTextColor SetJustifyH SetJustifyV SetWordWrap SetMaxLines GetStringWidth "
         .. "GetStringHeight SetSpacing"),
-    Texture = Set(REGION .. "SetTexture SetVertexColor SetColorTexture SetTexCoord SetAtlas"),
+    Texture = Set(REGION .. "SetTexture SetVertexColor SetColorTexture SetTexCoord SetAtlas SetBlendMode SetGradient"),
     Line = Set(REGION .. "SetTexture SetVertexColor SetColorTexture SetThickness SetStartPoint SetEndPoint SetDrawLayer"),
 }
 local BACKDROP = Set("SetBackdrop SetBackdropColor SetBackdropBorderColor")
@@ -81,7 +81,8 @@ local EVENTS = Set("ADDON_LOADED PLAYER_LOGIN PLAYER_LOGOUT PLAYER_ENTERING_WORL
     .. "UNIT_HAPPINESS UNIT_PET UNIT_PET_EXPERIENCE PET_UI_UPDATE ENCOUNTER_END BOSS_KILL ZONE_CHANGED ZONE_CHANGED_INDOORS "
     .. "PET_STABLE_SHOW PET_STABLE_UPDATE GUILD_RECIPE_KNOWN_BY_MEMBERS GROUP_ROSTER_UPDATE "
     .. "CONFIRM_XP_LOSS HARDCORE_DEATHS PLAYER_TARGET_CHANGED UPDATE_MOUSEOVER_UNIT QUEST_ACCEPTED CALENDAR_UPDATE_EVENT_LIST "
-    .. "CHAT_MSG_ADDON GUILD_ROSTER_UPDATE TRADE_SHOW TRADE_ACCEPT_UPDATE TRADE_CLOSED PLAYER_ROLES_ASSIGNED")
+    .. "CHAT_MSG_ADDON GUILD_ROSTER_UPDATE TRADE_SHOW TRADE_ACCEPT_UPDATE TRADE_CLOSED PLAYER_ROLES_ASSIGNED "
+    .. "PLAYER_SOFT_INTERACT_CHANGED NAME_PLATE_UNIT_ADDED NAME_PLATE_UNIT_REMOVED")
 
 local M = {}
 
@@ -114,6 +115,7 @@ function M:IsEventRegistered(event) return self.events[event] == true end
 function M:SetText(t) self.text = t == nil and "" or tostring(t) end
 function M:GetText() return self.text or "" end
 function M:SetTexture(path) self.texture = path end
+function M:SetParent(p) self.parent = p end
 function M:GetFont() return "Fonts\\FRIZQT__.TTF", self.size or 10, "" end
 function M:SetFont(_, size) self.size = size end
 function M:SetWordWrap(v) self.wrap = v and true or false end
@@ -321,6 +323,10 @@ function UnitName(unit)
     return W.units and W.units[unit] or nil
 end
 function UnitGUID(unit) return W.guids and W.guids[unit] or nil end
+function UnitIsGameObject(unit) return W.objects and W.objects[unit] or false end
+-- W.plates[unit] = a frame: the nameplate the game gives that unit
+function CreateColor(r, g, b, a) return { r = r, g = g, b = b, a = a } end
+C_NamePlate = { GetNamePlateForUnit = function(unit) return W.plates and W.plates[unit] or nil end }
 function UnitIsPlayer(unit) return W.players and W.players[unit] or false end
 function UnitIsUnit(a, b) return W.units and W.units[a] ~= nil and W.units[a] == W.units[b] or false end
 function GetRealmName() return "Forever" end

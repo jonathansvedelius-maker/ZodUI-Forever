@@ -890,9 +890,11 @@ local function Recommend()
     return memo.rec
 end
 
--- Where to walk for one quest step: its giver ("pickup"), the middle of its objectives ("do")
--- or where it is handed in ("handin"). Returns { key, map, x, y, zone, title } or nil.
-local function StepPlaceOf(task, kind)
+local NearestCamp -- (task) -> { x, y }: set below, once where you stand can be asked
+
+-- Where to walk for one quest step: its giver ("pickup"), its objectives ("do": the camp nearest you, else their
+-- middle) or where it is handed in ("handin"). Returns { key, map, x, y, zone, title } or nil.
+local function StepPlaceOf(task, kind, at)
     local q = task.quest
     if kind == "pickup" then
         if task.x then
@@ -905,14 +907,16 @@ local function StepPlaceOf(task, kind)
                 zone = q.turnin[4], title = "Hand in: " .. QuestName(q), name = QuestName(q) }
         end
     elseif q.spot and task.zmap then
-        return { key = "o" .. task.id, kind = "work", map = task.zmap, x = q.spot[1], y = q.spot[2], zone = q.zone,
-            title = "Do: " .. QuestName(q), name = QuestName(q) }
+        -- The key names the camp, so the arrow moves on when another camp becomes the nearest.
+        at = at or NearestCamp(task)
+        return { key = "o" .. task.id .. ":" .. at[1] .. ":" .. at[2], kind = "work", map = task.zmap, x = at[1], y = at[2],
+            zone = q.zone, title = "Do: " .. QuestName(q), name = QuestName(q) }
     end
 end
 
--- The same, with the batch it belongs to.
-local function StepPlace(task, kind)
-    local place = StepPlaceOf(task, kind)
+-- The same, with the batch it belongs to. `at` picks the objective camp ({ x, y }) for "do".
+local function StepPlace(task, kind, at)
+    local place = StepPlaceOf(task, kind, at)
     if place then place.batch, place.id = task.batch, task.id end
     return place
 end
@@ -943,7 +947,7 @@ local function WorldPos(map, x, y)
 end
 
 -- Where you stand: { map, x, y } in map units, with the world position when known; nil in an instance.
-local function Here()
+local function HereNow()
     local map = C_Map and C_Map.GetBestMapForUnit and Plain(C_Map.GetBestMapForUnit("player"))
     if not map then return end
     local here = { map = map }
@@ -969,6 +973,46 @@ local function Cost(a, b)
     end
     if a.map == b.map and a.x and b.x then return Dist(a.x, a.y, b.x, b.y) * YARDS_PER_UNIT end
     return 1e6
+end
+
+-- Where you stand, asked of the game once a refresh (you do not move while it draws).
+local function Here()
+    if not memo then return HereNow() end
+    if memo.here == nil then memo.here = HereNow() or false end
+    return memo.here or nil
+end
+
+-- The cost from where you stand to a map spot (Cost), or nil when the game does not say where you are. A spot's
+-- world position never changes, so it is asked for once.
+local worldAt = {}
+local function CostTo(from, map, x, y)
+    if not (from and from.x) then return end
+    local key = map .. ":" .. x .. ":" .. y
+    local p = worldAt[key]
+    if not p then
+        p = { map = map, x = x, y = y }
+        p.continent, p.wx, p.wy = WorldPos(map, x, y)
+        worldAt[key] = p
+    end
+    return Cost(from, p)
+end
+
+-- A quest's objective camps on its zone map: every camp the data has, else their middle, else none.
+local function Camps(q)
+    return q.camps or (q.spot and { q.spot }) or nil
+end
+
+-- The camp of a quest's objectives nearest you; their middle when the game does not say where you are.
+NearestCamp = function(task)
+    local q = task.quest
+    local camps, from = q.camps, Here()
+    if not (camps and from and from.x) then return q.spot end
+    local best, bestCost = q.spot, math.huge
+    for _, c in ipairs(camps) do
+        local cost = CostTo(from, task.zmap, c[1], c[2])
+        if cost and cost < bestCost then best, bestCost = c, cost end
+    end
+    return best
 end
 
 -- The hand-ins put in a walking order: quests handed in at the same spot (one NPC or two side by side) are one
@@ -1173,18 +1217,72 @@ local function WaitingBlocker(waiting)
     end
 end
 
--- Quests in your log whose objectives lie in the same place are one step: "Do: A + B".
+-- The quests in your log, not finished yet, with an objective camp within TOGETHER map units of a spot: the ones
+-- one walk there works on. { task, ... } in the stage's order.
 local TOGETHER = 8
+local function WorkingAt(stage, level, map, x, y)
+    local list = {}
+    for i, task in ipairs(stage.tasks) do
+        local camps = task.id and task.zmap == map and task.quest and Camps(task.quest)
+        if camps and TaskState(stage, i, level) == "inlog" and not Complete(task.id) then
+            for _, c in ipairs(camps) do
+                if Dist(c[1], c[2], x, y) <= TOGETHER then list[#list + 1] = task break end
+            end
+        end
+    end
+    return list
+end
+
+-- The best camp to work on some quests' objectives: { task, at, cost }, the lowest cost from where you stand,
+-- where every other quest in your log worked on at that camp too takes SHARED yards off (one walk does both).
+-- Without a position every camp costs 0, so the most shared one wins. nil when none of them has a camp.
+local SHARED = 150
+local function BestWork(stage, level, tasks)
+    local from, best = Here(), nil
+    for _, task in ipairs(tasks) do
+        for _, c in ipairs(Camps(task.quest) or {}) do
+            local others = 0
+            for _, t in ipairs(WorkingAt(stage, level, task.zmap, c[1], c[2])) do
+                if t ~= task then others = others + 1 end
+            end
+            local cost = (CostTo(from, task.zmap, c[1], c[2]) or 0) - SHARED * others
+            if not best or cost < best.cost then best = { task = task, at = c, cost = cost } end
+        end
+    end
+    return best
+end
+
+-- Entries { task, ... } in the order to walk to them from where you stand: by their giver ("pickup") or their
+-- best objective camp ("do"), those without a spot last. As they are when the game does not say where you are.
+local function WalkSort(stage, level, entries, kind)
+    local from = Here()
+    if not (from and from.x) or #entries < 2 then return entries end
+    local keyed = {}
+    for n, e in ipairs(entries) do
+        local task, cost = e.task, nil
+        if kind == "pickup" then
+            cost = task.x and CostTo(from, task.map, task.x, task.y)
+        else
+            local w = BestWork(stage, level, { task })
+            cost = w and w.cost
+        end
+        keyed[n] = { e = e, cost = cost or math.huge, n = n }
+    end
+    table.sort(keyed, function(a, b)
+        if a.cost ~= b.cost then return a.cost < b.cost end
+        return a.n < b.n
+    end)
+    local out = {}
+    for n, k in ipairs(keyed) do out[n] = k.e end
+    return out
+end
+
+-- Quests in your log whose objectives lie in the same place are one step: "Do: A + B".
 local function Together(stage, place, level)
     if not (place and place.kind == "work") then return place end
-    local names, ids = { place.name }, { [place.id] = true }
-    for i, task in ipairs(stage.tasks) do
-        local spot = task.quest and task.quest.spot
-        if task.id and not ids[task.id] and spot and task.zmap == place.map and TaskState(stage, i, level) == "inlog"
-            and not Complete(task.id) and Dist(spot[1], spot[2], place.x, place.y) <= TOGETHER then
-            ids[task.id] = true
-            names[#names + 1] = QuestName(task.quest)
-        end
+    local names = { place.name }
+    for _, task in ipairs(WorkingAt(stage, level, place.map, place.x, place.y)) do
+        if task.id ~= place.id then names[#names + 1] = QuestName(task.quest) end
     end
     if #names > 1 then
         place.name = table.concat(names, " + ")
@@ -1201,7 +1299,11 @@ local function Focused(stage, level)
         if task.id == id then
             local ts = TaskState(stage, i, level)
             if ts == "do" then return StepPlace(task, "pickup") end
-            if ts == "inlog" then return StepPlace(task, Complete(id) and "handin" or "do") end
+            if ts == "inlog" and Complete(id) then return StepPlace(task, "handin") end
+            if ts == "inlog" then
+                local w = BestWork(stage, level, { task })
+                return StepPlace(task, "do", w and w.at)
+            end
             db.focus = nil -- handed in, skipped or no longer offered: the route leads again
             return
         end
@@ -1219,22 +1321,28 @@ local function NextStep(stage)
         return Together(rec, focus, level)
     end
     for _, batch in ipairs(rec.batches or {}) do
+        -- The nearest giver first; then the best camp (the nearest, or one where several of your quests are
+        -- worked on); then the hand-ins in their walking order.
         local pickup, objective, handin, open
+        local givers, works = {}, {}
         for _, j in ipairs(batch.idx) do
             local task = rec.tasks[j]
             local ts = TaskState(rec, j, level)
             if ts == "do" then
                 open = true
-                pickup = pickup or StepPlace(task, "pickup")
+                if task.x then givers[#givers + 1] = { task = task } end
             elseif ts == "inlog" then
                 open = true
                 if Complete(task.id) then
                     handin = handin or StepPlace(task, "handin")
                 else
-                    objective = objective or StepPlace(task, "do")
+                    works[#works + 1] = task
                 end
             end
         end
+        if #givers > 0 then pickup = StepPlace(WalkSort(rec, level, givers, "pickup")[1].task, "pickup") end
+        local w = BestWork(rec, level, works)
+        if w then objective = StepPlace(w.task, "do", w.at) end
         if handin and not (pickup or objective) then
             -- The batch is all handing in now: go to the first stop of the walking order that is one of its own.
             local own = {}
@@ -1425,7 +1533,7 @@ ns.I = {
     RewardText = RewardText, Dist = Dist, ClassTag = ClassTag, BuildStages = BuildStages, TaskKey = TaskKey,
     TaskState = TaskState, Status = Status, Recommend = Recommend, StepPlace = StepPlace, WorldPos = WorldPos,
     Here = Here, ReadyToHandIn = ReadyToHandIn, CurrentBatch = CurrentBatch, ObjectiveLines = ObjectiveLines, LOW_SOON = LOW_SOON,
-    Badges = Badges, WaitingBlocker = WaitingBlocker, NextStep = NextStep, QuestsLeft = QuestsLeft, DungeonsInRange = DungeonsInRange,
+    Badges = Badges, WaitingBlocker = WaitingBlocker, NextStep = NextStep, WalkSort = WalkSort, BestWork = BestWork, QuestsLeft = QuestsLeft, DungeonsInRange = DungeonsInRange,
     xpAsked = xpAsked, DungeonValue = DungeonValue, RankedDungeons = RankedDungeons, XPText = XPText, Leftovers = Leftovers,
     ClassQuests = ClassQuests, OpenTasks = OpenTasks, RangeText = RangeText, StageName = StageName, Where = Where,
     CLASS = CLASS,

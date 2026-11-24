@@ -63,6 +63,9 @@ ns.AddPage({
 
 -- Newest first. One line per thing a player would notice.
 ns.NEWS = {
+    { "0.66.0", {
+        "New: Object glow. A pillar of light rises from quest objects (gold) and chests (blue) near you, so you don't walk past them, with a sound the first time. Off until you switch it on; /zod spotter test lights up any object to try the look.",
+    } },
     { "0.65.1", {
         "The group headings in the list on the left (This character, All characters, ...) have a colour of their own with the Forever look: your accent, or a warm tan with the gold accent.",
     } },

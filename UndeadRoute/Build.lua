@@ -293,12 +293,17 @@ function ns.BuildQuests(src, stages)
                 if #needs > 0 then e.needs = needs end
                 if closers[id] then e.closed = closers[id] end
                 if spot and spot[1] and spot[1][1] then e.turnin = { spot[1][1], spot[1][2], spot[1][3], mapName[spot[1][1]] } end
-                -- Where the work is: the middle of the objective camps in this zone.
-                local sx, sy, sn = 0, 0, 0
+                -- Where the work is: the middle of the objective camps in this zone, and the camps themselves when
+                -- there are more than one (the route walks to the nearest, and joins quests that share one).
+                local sx, sy, sn, camps = 0, 0, 0, {}
                 for _, camp in ipairs(spot and spot[2] or {}) do
-                    if camp[1] == zone.map then sx, sy, sn = sx + camp[2], sy + camp[3], sn + 1 end
+                    if camp[1] == zone.map then
+                        sx, sy, sn = sx + camp[2], sy + camp[3], sn + 1
+                        camps[sn] = { camp[2], camp[3] }
+                    end
                 end
                 if sn > 0 then e.spot = { math.floor(sx / sn * 10 + 0.5) / 10, math.floor(sy / sn * 10 + 0.5) / 10 } end
+                if sn > 1 then e.camps = camps end
                 local rew = Rewards(id)
                 if #rew > 0 then e.rewards = rew end
                 list[#list + 1] = e

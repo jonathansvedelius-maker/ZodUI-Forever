@@ -6,6 +6,9 @@
 <title>Undead Route – förhandsvisning</title>
 <style>
 @font-face { font-family: "WowFont"; src: url("/fonts/FRIZQT__.ttf"), local("Palatino Linotype"), local("Georgia"); }
+@font-face { font-family: "WowMorpheus"; src: url("/fonts/MORPHEUS.ttf"), local("Georgia"); }
+@font-face { font-family: "WowArial"; src: url("/fonts/ARIALN.ttf"), local("Arial Narrow"); }
+@font-face { font-family: "WowSkurri"; src: url("/fonts/SKURRI.ttf"), local("Georgia"); }
 :root {
     --panel: #17181c; --panel-2: #1f2127; --line: #2c2f37; --ink: #e7e8ec; --muted: #9a9ca6;
     --accent: #ffd100; --bad: #ff6b6b; --good: #59d973;
@@ -195,17 +198,24 @@ kbd { padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; backgro
         while (chat.children.length > 400) chat.removeChild(chat.firstChild);
         chat.scrollTop = chat.scrollHeight;
     }
-    function textStyle(el, size, wrap, spacing, bounded) {
+    // The game's fonts by file: Fonts\MORPHEUS.TTF and the like; anything else is Friz Quadrata.
+    const FAMILY = { MORPHEUS: "WowMorpheus", ARIALN: "WowArial", SKURRI: "WowSkurri" };
+    const family = (path) => {
+        const m = /([A-Z_]+)\.TTF$/i.exec(path || "");
+        return (m && FAMILY[m[1].toUpperCase()] || "WowFont") + ", serif";
+    };
+    function textStyle(el, size, wrap, spacing, bounded, font) {
+        el.style.fontFamily = family(font);
         el.style.fontSize = size + "px";
         el.style.lineHeight = (size + spacing) + "px";
         el.style.whiteSpace = !bounded ? "pre" : wrap ? "pre-wrap" : "nowrap";
         el.style.overflowWrap = bounded && wrap ? "break-word" : "normal";
     }
-    function measured(text, size, width, wrap, spacing) {
-        const key = size + "|" + width + "|" + wrap + "|" + spacing + "|" + text;
+    function measured(text, size, width, wrap, spacing, font) {
+        const key = size + "|" + width + "|" + wrap + "|" + spacing + "|" + (font || "") + "|" + text;
         let box = sizes.get(key);
         if (!box) {
-            textStyle(measure, size, wrap, spacing, width > 0);
+            textStyle(measure, size, wrap, spacing, width > 0, font);
             measure.style.width = width > 0 ? width + "px" : "auto";
             measure.innerHTML = wowHtml(text) || "&nbsp;";
             const r = measure.getBoundingClientRect();
@@ -269,23 +279,53 @@ kbd { padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; backgro
         hide(id) { els[id].style.display = "none"; },
         over(id) { return els[id].matches(":hover"); },
         z(id, z) { els[id].style.zIndex = z; },
-        text(id, text, size, r, g, b, wrap, spacing, bounded, justify) {
+        text(id, text, size, r, g, b, wrap, spacing, bounded, justify, font) {
             const el = els[id];
             el.innerHTML = wowHtml(text);
-            textStyle(el, size, wrap, spacing, bounded);
+            textStyle(el, size, wrap, spacing, bounded, font);
             el.style.color = rgba(r, g, b, 1);
             el.style.textAlign = justify.toLowerCase();
             el.style.overflow = bounded && !wrap ? "hidden" : "visible";
             el.style.textOverflow = bounded && !wrap ? "ellipsis" : "clip";
         },
-        texture(id, path, r, g, b, a) {
-            const el = els[id];
+        // coord: "left right top bottom" of the image shown, or ""; grad: "VERTICAL r g b a r g b a" (from bottom or
+        // left to top or right), or ""; blend: "ADD" lights up what is under it; rot: radians, counter-clockwise.
+        texture(id, path, r, g, b, a, coord, grad, blend, rot) {
+            const el = els[id], s = el.style;
             el.classList.remove("tick", "unknown");
-            el.style.background = "";
+            s.background = ""; s.opacity = ""; s.mask = ""; s.webkitMask = "";
+            s.mixBlendMode = blend === "ADD" ? "plus-lighter" : "";
+            s.transform = rot ? "rotate(" + (-rot) + "rad)" : "";
             el.innerHTML = "";
-            if (/WHITE8x8/i.test(path)) el.style.background = rgba(r, g, b, a);
-            else if (/ReadyCheck-Ready/i.test(path)) { el.classList.add("tick"); el.innerHTML = TICK; }
-            else if (path) { el.classList.add("unknown"); el.title = path; }
+            const media = /\\AddOns\\[^\\]+\\Media\\(.+)$/i.exec(path || "");
+            if (/WHITE8x8/i.test(path) && grad) {
+                const v = grad.split(" "), n = v.slice(1).map(Number);
+                s.background = "linear-gradient(to " + (v[0] === "HORIZONTAL" ? "right" : "top") + ","
+                    + rgba(n[0], n[1], n[2], n[3]) + "," + rgba(n[4], n[5], n[6], n[7]) + ")";
+            } else if (/WHITE8x8/i.test(path)) {
+                s.background = rgba(r, g, b, a);
+            } else if (/ReadyCheck-Ready/i.test(path)) {
+                el.classList.add("tick"); el.innerHTML = TICK;
+            } else if (media) {
+                const url = 'url("/media/' + media[1].replace(/\\/g, "/").replace(/\.(tga|blp)$/i, "") + '")';
+                let size = "100% 100%", pos = "0 0";
+                if (coord) {
+                    const [l, rr, t, bb] = coord.split(" ").map(Number), cw = rr - l, ch = bb - t;
+                    size = (100 / cw) + "% " + (100 / ch) + "%";
+                    pos = (cw < 1 ? (l / (1 - cw)) * 100 : 0) + "% " + (ch < 1 ? (t / (1 - ch)) * 100 : 0) + "%";
+                }
+                s.backgroundImage = url; s.backgroundSize = size; s.backgroundPosition = pos;
+                s.backgroundRepeat = "no-repeat"; s.opacity = a;
+                if (!(r > 0.99 && g > 0.99 && b > 0.99)) { // tinted: the colours multiplied, as the game does
+                    s.backgroundColor = rgba(r, g, b, 1);
+                    s.backgroundBlendMode = "multiply";
+                    for (const k of ["mask", "webkitMask"]) { // and the image's own alpha kept
+                        s[k + "Image"] = url; s[k + "Size"] = size; s[k + "Position"] = pos; s[k + "Repeat"] = "no-repeat";
+                    }
+                } else {
+                    s.backgroundBlendMode = "";
+                }
+            } else if (path) { el.classList.add("unknown"); el.title = path; }
         },
         backdrop(id, r, g, b, a, er, eg, eb, ea) {
             const s = els[id].style;
@@ -333,8 +373,8 @@ kbd { padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; backgro
                 window.addEventListener("mouseup", up);
             });
         },
-        measureW(text, size, spacing) { return measured(text, size, 0, false, spacing).w; },
-        measureH(text, size, width, wrap, spacing) { return measured(text, size, wrap ? width : 0, wrap, spacing).h; },
+        measureW(text, size, spacing, font) { return measured(text, size, 0, false, spacing, font).w; },
+        measureH(text, size, width, wrap, spacing, font) { return measured(text, size, wrap ? width : 0, wrap, spacing, font).h; },
 
         chat(text) { line("", wowHtml(text)); },
         alert(text) {
@@ -442,7 +482,10 @@ kbd { padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; backgro
         $("slash").value = H.start;
         for (const f of toc.files) H.sources[f] = await (await get("/addon/" + f)).text();
         // Text is measured to lay the window out, so the font has to be in first.
-        try { await Promise.all([10, 12, 16].map((n) => document.fonts.load(n + 'px "WowFont"'))); } catch (e) { /* fallback font */ }
+        try {
+            await Promise.all([10, 12, 16].map((n) => document.fonts.load(n + 'px "WowFont"'))
+                .concat(["WowMorpheus", "WowArial"].map((f) => document.fonts.load('16px "' + f + '"'))));
+        } catch (e) { /* fallback font */ }
         const lua = await (await get("/wow.lua")).text();
         fengari.load(lua, "@wow.lua")();
         setInterval(() => sim("tick", 0.1), 100); // OnUpdate scripts; does nothing for an addon without any
