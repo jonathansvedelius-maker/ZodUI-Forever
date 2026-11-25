@@ -16,6 +16,8 @@ local frames
 local function Widget()
     local w = { scripts = {}, shown = true }
     return setmetatable(w, { __index = function(_, k)
+        -- Widget methods are CamelCase; a lowercase key is the addon's own field, unset until it sets one, as in the game.
+        if type(k) == "string" and k:match("^%l") then return nil end
         if k == "SetScript" then return function(self, name, fn) self.scripts[name] = fn end end
         if k == "SetText" then return function(self, t) self.text = t end end
         if k == "GetFont" then return function(self) return "Font", rawget(self, "fsize") or 10, "" end end

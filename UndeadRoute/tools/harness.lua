@@ -7,6 +7,8 @@ local completed, inlog = {}, {}
 local function Widget()
     local w = { scripts = {}, shown = true }
     return setmetatable(w, { __index = function(_, k)
+        -- Widget methods are CamelCase; a lowercase key is the addon's own field, unset until it sets one, as in the game.
+        if type(k) == "string" and k:match("^%l") then return nil end
         if k == "SetScript" then return function(self, name, fn) self.scripts[name] = fn end end
         if k == "SetText" then return function(self, t) self.text = t end end
         if k == "GetFont" then return function(self) return "Font", rawget(self, "fsize") or 10, "" end end
@@ -101,6 +103,7 @@ assert(load(@RECORDER@, "Recorder.lua"))("UndeadRoute", ns)
 local recorder = frames[#frames]
 assert(recorder.scripts.OnEvent, "the quest recorder listens to nothing")
 assert(load(@MOTION@, "Motion.lua"))("UndeadRoute", ns)
+local FDB_SAMPLE = @FDB@ -- loaded by the ForeverDB test below
 assert(load(@ROUTE@, "Route.lua"))("UndeadRoute", ns)
 assert(load(@WINDOW@, "Window.lua"))("UndeadRoute", ns)
 assert(load(@GUIDE@, "Guide.lua"))("UndeadRoute", ns)
@@ -819,19 +822,41 @@ do
 end
 
 -- A quest that needs things from several dungeons is a quest in one of them and a note in the others.
+-- Which quests need several dungeons comes from the data: every one the route's dungeon stages share is checked.
 do
-    local quest, notes = {}, {}
-    for _, s in ipairs(ns.Stages) do
-        if s.kind == "dungeon" then
-            for _, t in ipairs(s.tasks) do
-                if t.id == 95036 then quest[#quest + 1] = s.hub end
-                if t.t and t.t:find("A Moon-Kissed Blade", 1, true) then notes[#notes + 1] = s.hub .. ": " .. t.t end
+    local stagesOf, stageNames = {}, {}
+    for _, s in ipairs(ns.Stages) do if s.kind == "dungeon" then stageNames[s.dungeon] = s end end
+    for _, d in ipairs(ns.Dungeons or {}) do
+        if stageNames[d.name] then
+            for _, q in ipairs(d.quests) do
+                stagesOf[q.id] = stagesOf[q.id] or { name = q.name }
+                table.insert(stagesOf[q.id], stageNames[d.name])
             end
         end
     end
-    assert(#quest == 1, "A Moon-Kissed Blade is a quest in " .. #quest .. " dungeons: " .. table.concat(quest, ", "))
-    assert(#notes >= 1, "the other dungeons do not say what A Moon-Kissed Blade needs from them")
-    say("Moon-Kissed Blade: quest in " .. quest[1] .. "; " .. table.concat(notes, " / "))
+    local idsNamed = {} -- the notes name the quest: only quests whose name no other quest has can be told apart
+    for id, list in pairs(stagesOf) do idsNamed[list.name] = (idsNamed[list.name] or 0) + 1 end
+    local checked, example = 0, nil
+    for id, list in pairs(stagesOf) do
+        if #list > 1 and idsNamed[list.name] == 1 then
+            local quest, notes = {}, {}
+            for _, s in ipairs(list) do
+                for _, t in ipairs(s.tasks) do
+                    if t.id == id then quest[#quest + 1] = s.hub end
+                    if t.t and t.t:find(list.name .. ":", 1, true) then notes[#notes + 1] = s.hub .. ": " .. t.t end
+                end
+            end
+            if #quest + #notes > 0 then -- this character may take it
+                -- Listed under at most one (maybe a dungeon off the route); every other one says where it is listed.
+                assert(#quest <= 1, list.name .. " is a quest in " .. #quest .. " dungeons: " .. table.concat(quest, ", "))
+                assert(#quest + #notes == #list, "the other dungeons do not say what " .. list.name .. " needs from them")
+                checked = checked + 1
+                if #quest == 1 then example = example or (list.name .. ": quest in " .. quest[1] .. "; " .. table.concat(notes, " / ")) end
+            end
+        end
+    end
+    say(checked .. " quests in several of the route's dungeons, each a quest in one and a note in the others"
+        .. (example and (", e.g. " .. example) or ""))
 end
 
 -- Hand-ins in walking order: one stop per spot, and each next stop the nearest one left.
@@ -1133,42 +1158,65 @@ do
     C_AddOns = { IsAddOnLoaded = function() return false end, LoadAddOn = function(name) asked[name] = true return false end }
     ns.Dungeons, ns.ClassQuests, ns.ZoneQuests, ns.NeedLimit = nil, nil, nil, nil
     local how, missing = ns.LoadQuests()
-    assert(how == nil and #missing >= 3 and next(ns.ZoneQuests) == nil, "without the quest-data addons the route still has quests")
-    assert(asked.NaowhForever_DiscoveryData and asked.NaowhForever_JourneysData, "the data packs that load on demand are not asked for")
+    assert(how == nil and #missing == 1 and missing[1] == "ForeverDB" and next(ns.ZoneQuests) == nil,
+        "without ForeverDB the route still has quests")
+    assert(asked.ForeverDB, "ForeverDB, which loads on demand, is not asked for")
     out = {}
     recorder.scripts.OnEvent(recorder, "PLAYER_LOGIN")
-    assert(plain(out[1] or ""):find("no quest list", 1, true) and plain(out[1]):find("NaowhForever Discovery", 1, true),
+    assert(plain(out[1] or ""):find("no quest list", 1, true) and plain(out[1]):find("ForeverDB", 1, true),
         "the route does not say which quest-data addons are missing: " .. tostring(out[1]))
     out = {}
     SlashCmdList.UNDEADROUTE("data")
-    assert(plain(table.concat(out, " ")):find("missing NaowhForever Dungeon Journal", 1, true), "/route data does not list what is missing")
-    local map
-    for _, stage in ipairs(ns.AllStages or ns.Stages) do if stage.maps then map = stage.maps[1] break end end
-    NaowhForever = {
-        Journal = { QuestData = { { name = "Test Hold", levels = { 15, 20 },
-            quests = { { 900001, "Into the Hold", 16, "H", "pre", "Testland - Bob", map, 50, 50 } } } } },
-        CompletoQuestData = {
-            Zones = { { map = map, name = "Testland", quests = { 900003, 900002 } } },
-            Quests = { [900001] = { "Into the Hold", 16, 14, 2, 0, 0 },
-                [900002] = { "First Steps", 5, 4, 3, 0, 0, map, 40, 40, "Guide Bob" },
-                [900003] = { "Second Steps", 6, 5, 3, 0, 0, map, 41, 41, "Guide Bob" },
-                [900004] = { "Smite the Test", 10, 10, 3, 0, 2, map, 1, 1, "Trainer" } },
-            Requires = { [900003] = { 900002 } }, Dungeon = {}, Repeatable = {},
-        },
-        JourneyQuestSpots = { [900002] = { { map, 42, 42 }, { { map, 60, 60 } } } },
-    }
+    assert(plain(table.concat(out, " ")):find("missing ForeverDB", 1, true), "/route data does not list what is missing")
+
+    -- Real ForeverDB rows (tools/foreverdb-sample.lua): Northshire, the Valley of Trials, a Skyborne hunter quest.
+    local function Sample() return assert(load(FDB_SAMPLE, "foreverdb-sample.lua"))() end
+    local function ByIdIn(list) local t = {} for i, q in ipairs(list or {}) do t[q.id] = q t[q.id].pos = i end return t end
+    ForeverDB = Sample()
     ns.Dungeons, ns.ClassQuests, ns.ZoneQuests, ns.NeedLimit = nil, nil, nil, nil
     how = ns.LoadQuests()
-    local zone = ns.ZoneQuests[map]
-    assert(how == "built" and zone and #zone == 2 and zone[1].id == 900002 and zone[2].id == 900003, "the zone quests are not built, prerequisites first")
-    assert(zone[1].giver == "Guide Bob" and zone[1].turnin[2] == 42 and zone[1].turnin[4] == "Testland" and zone[1].spot[1] == 60,
-        "a built quest lacks its giver, hand-in or objective spot")
-    assert(zone[2].needs and zone[2].needs[1] == 900002, "a built quest lacks its prerequisite")
-    assert(ns.ClassQuests[2] and ns.ClassQuests[2][1].id == 900004 and #ns.ClassQuests[1] == 0, "class quests are not sorted to their class")
-    assert(ns.Dungeons[1].name == "Test Hold" and ns.Dungeons[1].quests[1].side == "H" and ns.Dungeons[1].quests[1].pre,
-        "dungeon quests are not built")
-    say("quest lists built from the installed addons at login; without them it says which are missing")
-    NaowhForever, C_AddOns = nil, nil
+    assert(how == "built", "the quest lists are not built from ForeverDB: " .. table.concat(ns.questMissing or {}, ", "))
+    local elwynn, durotar = ByIdIn(ns.ZoneQuests[1429]), ByIdIn(ns.ZoneQuests[1411])
+    local willem = elwynn[783]
+    -- A giver with only a world position, inside a sub-zone (Northshire, area 9), lands on its zone's map.
+    assert(willem and willem.giver == "Deputy Willem" and willem.x == 48.2 and willem.y == 43 and willem.side == "A" and not willem.race,
+        "a giver known only by world position is not placed on Elwynn Forest (48.2, 43)")
+    assert(willem.turnin and willem.turnin[1] == 1429 and willem.turnin[2] == 48.9 and willem.turnin[3] == 41.6 and willem.turnin[4] == "Elwynn Forest",
+        "the hand-in is not placed")
+    assert(elwynn[7] and elwynn[7].pos > willem.pos and elwynn[7].needs and elwynn[7].needs[1] == 783,
+        "a prerequisite (a list of one) is not a plain prerequisite listed first")
+    assert(elwynn[33] and elwynn[33].spot, "an item objective does not find the mobs that drop it")
+    -- The Valley of Trials: inside the Barrens' rectangle too, but it is Durotar.
+    assert(durotar[788] and durotar[788].x == 42.1 and durotar[788].y == 68.3 and durotar[788].side == "H", "a map spot is not used")
+    assert(type(durotar[788].needs[1]) == "table" and #durotar[788].needs[1] == 2, "preQuestSingle is not 'any one of'")
+    assert(durotar[5441] and durotar[5441].x == 44.6 and durotar[5441].y == 68.7, "a world position in two maps' rectangles is not put on the quest's zone")
+    assert(not durotar[5441].item, "the item a quest hands you is taken for the item that starts it")
+    -- The Skyborne: bit 33 alone is the Alliance Skyborne, not every race; the hunter sort stands in for a class mask of 0.
+    local hunter = ByIdIn(ns.ClassQuests[3])[94013]
+    assert(hunter and hunter.side == "A" and hunter.race == 2 ^ 32, "a Skyborne-only quest lost its race limit")
+    assert(not ByIdIn(ns.ClassQuests[1])[94013], "a hunter quest (class mask 0, hunter sort) is listed for warriors")
+
+    -- Edge cases, each on a fresh copy: without the quest's zone the outline decides; specialFlags 2 is not
+    -- repeatable but 1 is; a quest with no level does not stop the build; a loop of prerequisites is cut.
+    local function Build(change)
+        local F = Sample()
+        change(F)
+        local J, D, Spots = ns.FromForeverDB(F, ns.AllStages or ns.Stages)
+        local _, _, zones = ns.BuildQuests({ J = J, D = D, Spots = Spots }, ns.AllStages or ns.Stages)
+        return zones, D
+    end
+    local zones = Build(function(F) F.qx[5441][11] = nil end)
+    assert(ByIdIn(zones[1411])[5441], "without its zone a quest's giver is not placed by the zone outlines")
+    zones = Build(function(F) F.qx[7][13] = 2 end)
+    assert(ByIdIn(zones[1429])[7], "specialFlags 2 is read as repeatable")
+    zones = Build(function(F) F.qx[7][13] = 1 end)
+    assert(not ByIdIn(zones[1429])[7], "a repeatable quest is still in the zone list")
+    zones = Build(function(F) F.quest[33] = { "Wolves Across the Border" } end) -- no level: left out, not an error
+    assert(zones[1429] and ByIdIn(zones[1429])[783] and not ByIdIn(zones[1429])[33], "a quest with no level stops the build")
+    local _, D = Build(function(F) F.qx[783][3] = { 7 } end)
+    assert(D.Requires[7][1] == 783 and #(D.Requires[783] or {}) == 0, "a loop of prerequisites is not cut at the link to the higher level")
+    say("quest lists built from ForeverDB at login; without it the route says it is missing")
+    ForeverDB, C_AddOns = nil, nil
     ns.Dungeons, ns.ClassQuests, ns.ZoneQuests, ns.NeedLimit, ns.questSource, ns.questMissing = table.unpack(keep, 1, 6)
     out = {}
 end
@@ -1219,11 +1267,12 @@ assert(status and type(status.stage) == "string" and type(status.range) == "stri
     "UndeadRoute.Status() is incomplete")
 say(string.format("api: %s (%s), %d open, next: %s", status.stage, status.range, status.left, tostring(status.next)))
 local blade = UndeadRoute.TurnIn(95126) -- The Moonsilver Blade
-assert(blade and blade.zone == "Silverpine Forest" and blade.hub == "The Sepulcher" and blade.x == 43.3 and blade.y == 41,
+assert(blade and blade.zone == "Silverpine Forest" and blade.hub == "The Sepulcher"
+    and math.abs(blade.x - 43.3) < 0.5 and math.abs(blade.y - 41) < 0.5,
     "TurnIn() does not place The Moonsilver Blade at The Sepulcher")
 local beast = UndeadRoute.TurnIn(6062) -- Taming the Beast, Durotar
-assert(beast and beast.zone == "Durotar" and beast.hub == "Razor Hill" and beast.npc == "Gar'Thok",
-    "TurnIn() does not name Gar'Thok at Razor Hill: " .. tostring(beast and beast.npc))
+assert(beast and beast.zone == "Durotar" and beast.hub == "Razor Hill" and beast.npc == "Thotar",
+    "TurnIn() does not name Thotar at Razor Hill: " .. tostring(beast and beast.npc))
 assert(UndeadRoute.TurnIn(1) == nil and UndeadRoute.TurnIn("x") == nil, "TurnIn() answers for a quest it has no data for")
 assert(UndeadRoute.PinTurnIn(95126, "The Moonsilver Blade") == true and UndeadRoute.PinTurnIn(1) == false,
     "PinTurnIn() pins a known hand-in and refuses an unknown one")

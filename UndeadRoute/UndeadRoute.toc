@@ -2,12 +2,12 @@
 ## Title: Undead Route
 ## Notes: Step-by-step 1-60 leveling route for WoW Forever, every race and class of both factions. Type /route.
 ## Author: Jonathan
-## Version: 1.26.0
+## Version: 1.27.0
 ## IconTexture: Interface\AddOns\UndeadRoute\Media\Icon
 ## AddonCompartmentFunc: UndeadRoute_OnAddonCompartmentClick
 ## AddonCompartmentFuncOnEnter: UndeadRoute_OnAddonCompartmentEnter
 ## AddonCompartmentFuncOnLeave: UndeadRoute_OnAddonCompartmentLeave
-## OptionalDeps: ZodUI, NaowhForever, NaowhForever_DungeonJournal, ForeverDungeonJournal
+## OptionalDeps: ZodUI, ForeverDB, ForeverDungeonJournal
 ## SavedVariables: UndeadRouteRecordDB
 ## SavedVariablesPerCharacter: UndeadRouteDB
 

@@ -18,6 +18,7 @@ for (const script of ["harness.lua", "races.lua"]) {
         .replace("@REC@", quote("Recorded.lua"))
         .replace("@RECORDER@", quote("Recorder.lua"))
         .replace("@MOTION@", quote("Motion.lua"))
+        .replace("@FDB@", quote("tools/foreverdb-sample.lua"))
         .replace("@ROUTE@", quote("Route.lua"))
         .replace("@WINDOW@", quote("Window.lua"))
         .replace("@GUIDE@", quote("Guide.lua"))
