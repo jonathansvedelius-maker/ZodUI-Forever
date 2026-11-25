@@ -100,6 +100,7 @@ assert(load(@REC@, "Recorded.lua"))("UndeadRoute", ns)
 assert(load(@RECORDER@, "Recorder.lua"))("UndeadRoute", ns)
 local recorder = frames[#frames]
 assert(recorder.scripts.OnEvent, "the quest recorder listens to nothing")
+assert(load(@MOTION@, "Motion.lua"))("UndeadRoute", ns)
 assert(load(@ROUTE@, "Route.lua"))("UndeadRoute", ns)
 assert(load(@WINDOW@, "Window.lua"))("UndeadRoute", ns)
 assert(load(@GUIDE@, "Guide.lua"))("UndeadRoute", ns)
@@ -129,6 +130,9 @@ inlog[1098] = true
 ZodUICharDB = { questsDone = { { id = 95042, name = "Seeking the Kor Gem" }, { id = "bad" }, "bad" } }
 
 fire("ADDON_LOADED", "UndeadRoute")
+-- Nothing here runs the motion driver's OnUpdate: with animations off a close hides at once, as the checks expect.
+assert(ns.Motion.enabled == true, "animations are not on by default")
+ns.Motion.enabled = false
 fire("PLAYER_LOGIN")
 flush("login: Undead Paladin, level 25, in Hillsbrad")
 
@@ -299,6 +303,11 @@ assert(W.title.fsize == 12 and W.detail.title.fsize == 12, "text is not 2 pixels
 say("text size: " .. W.title.fsize .. " (stub default 10)")
 SlashCmdList["UNDEADROUTE"]("font 4") assert(UndeadRouteDB.font == 4) SlashCmdList["UNDEADROUTE"]("font 9") assert(UndeadRouteDB.font == 4)
 UndeadRouteDB.font = nil
+SlashCmdList["UNDEADROUTE"]("motion")
+assert(UndeadRouteDB.motion == false and ns.Motion.enabled == false, "/route motion does not turn the animations off")
+SlashCmdList["UNDEADROUTE"]("motion")
+assert(UndeadRouteDB.motion == true and ns.Motion.enabled == true, "/route motion does not turn them back on")
+ns.Motion.enabled = false
 
 -- Hub coordinates in Data.lua against the data: how many of the stage's givers stand within 8 units.
 for _, s in ipairs(ns.Stages) do

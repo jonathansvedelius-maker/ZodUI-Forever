@@ -642,6 +642,7 @@ function M:Draw()
     local y = 0
     for i = 1, math.min(SHOWN, #list) do
         local r, c = list[i], Card(i)
+        local moved = false
         if c.roll ~= r then -- this card now shows another roll
             c.roll = r
             if r.leaving then -- already fading out: leave it
@@ -651,6 +652,7 @@ function M:Draw()
                 T.Fade(c, 1, 0.2) -- a new roll fades in
             else
                 T.Fade(c, 1, 0.01) -- moved up from another card: no fade, but no leftover one either
+                moved = true
             end
         end
         c.iconFrame:EnableMouse(not r.leaving) -- only the item box and the buttons take the mouse
@@ -721,6 +723,8 @@ function M:Draw()
         c:SetHeight(h)
         c:ClearAllPoints()
         c:SetPoint("TOP", stack, "TOP", 0, -y)
+        if moved and r.drawnY and r.drawnY ~= y then ns.Motion.Glide(c, 0, y - r.drawnY) end -- from where it was
+        r.drawnY = y
         c:SetBackdropBorderColor(r.done and r.winner and Same(r.winner, Me()) and T.GREEN[1] or T.BORDER[1],
             r.done and r.winner and Same(r.winner, Me()) and T.GREEN[2] or T.BORDER[2],
             r.done and r.winner and Same(r.winner, Me()) and T.GREEN[3] or T.BORDER[3], 1)

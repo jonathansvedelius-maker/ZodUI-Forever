@@ -190,7 +190,8 @@ say("  modules: " .. #ns.order)
 say("--- window and home")
 slash("")
 check(ZodUIFrame and ZodUIFrame:IsShown(), "/zod opens the window")
-check(UISpecialFrames[1] == "ZodUIFrame", "Escape closes the window")
+check(ZodUIFrame.motionEscape and _G[UISpecialFrames[1]] == ZodUIFrame.motionEscape and ZodUIFrame.motionEscape:IsShown(),
+    "Escape closes the window (through its stand-in, so it fades)")
 check(has("Level 24"), "home shows the level")
 check(has("4,000 / 20,000 XP  (20%)   +15% rested"), "home shows the XP bar text")
 for _, title in ipairs({ "Session", "Loot this session", "Gold", "Characters", "To do", "Gear and bags", "Reputation" }) do
@@ -260,6 +261,7 @@ do
     check(f.short.rows[1]:IsShown() or f.short.none:IsShown(), "the folded window lists what wants doing, or says nothing does")
     check(#ns.errors == 0, "folded refresh draws without errors" .. (ns.errors[1] and (": " .. ns.errors[1]) or ""))
     ns.Show("settings")
+    pump(0.5)
     check(not ns.db.window.folded and f:GetWidth() == 900 and f.content:IsShown(), "opening a page by name unfolds the window")
     f.bar.scripts.OnMouseUp(f.bar, "LeftButton")
     f.bar.scripts.OnMouseUp(f.bar, "LeftButton")
@@ -1152,6 +1154,7 @@ check(ns.db.movers.toasts.point == "TOPLEFT" and ns.db.movers.toasts.x == 40, "d
 ns.db.general.toasts = true
 ns.Alert("Moved one")
 ns.Alert("Moved two")
+pump(0.5) -- the new one rises in and the older one glides down: read where they end
 local p1, _, _, x1, y1 = ns.toasts[1]:GetPoint(1)
 local _, _, _, _, y2 = ns.toasts[2]:GetPoint(1)
 check(p1 == "TOPLEFT" and x1 == 40 and y1 == -300 and y2 == -334, "the notices show where the box was dropped, stacked down")
@@ -3109,10 +3112,13 @@ do
     local want = (ns.db.general.alpha or 100) / 100
     ns.Close()
     pump(0.2)
-    local n = W.anims or 0
     ns.Show("home")
-    check(ZodUIFrame:IsShown() and (W.anims or 0) > n and ZodUIFrame:GetAlpha() == want, "the window fades in to its set alpha")
+    check(ZodUIFrame:IsShown() and ZodUIFrame:GetAlpha() < want, "the window starts its fade in from nothing")
+    pump(0.5)
+    check(ZodUIFrame:IsShown() and ZodUIFrame:GetAlpha() == want, "the window fades in to its set alpha")
     ns.Toggle()
+    check(ZodUIFrame:IsShown(), "toggled, it is still on screen while it fades")
+    pump(0.5)
     check(not ZodUIFrame:IsShown() and ZodUIFrame:GetAlpha() == want, "toggled, it fades out, hides, and keeps its alpha for next time")
     ns.Toggle()
     check(ZodUIFrame:IsShown(), "and toggles back")
@@ -3121,6 +3127,7 @@ do
     ns.Toast("first")
     ns.Toast("second")
     local a, b = ns.toasts[1], ns.toasts[2]
+    pump(0.5)
     check(#ns.toasts == 2 and a ~= b and a:IsShown() and a:GetAlpha() == 1, "two notices fade in")
     pump(20)
     check(#ns.toasts == 0 and not a:IsShown() and not b:IsShown(), "they fade out and leave")
@@ -3128,6 +3135,179 @@ do
     ns.Toast("fourth")
     check(ns.toasts[1] ~= ns.toasts[2], "a notice is never handed out twice from the pool")
     pump(20)
+end
+
+say("--- motion")
+do
+    local Mo, f = ns.Motion, ZodUIFrame
+    local want = (ns.db.general.alpha or 100) / 100
+    check(Mo.enabled == true and ns.db.general.motion == true, "animations are on by default")
+    ns.Close()
+    pump(0.5)
+    local _, _, _, x0, y0 = f:GetPoint(1)
+
+    ns.Show("home")
+    local _, dy = Mo.CurrentOffset(f)
+    check(f:GetAlpha() == 0 and dy == -Mo.RISE and select(5, f:GetPoint(1)) == y0 - Mo.RISE, "opening starts unseen, RISE px low")
+    pump(0.1)
+    local _, mid = Mo.CurrentOffset(f)
+    check(mid > -Mo.RISE and mid < 0 and f:GetAlpha() > 0 and f:GetAlpha() < want, "midway it is rising and fading in")
+    pump(0.5)
+    local dx2, dy2 = Mo.CurrentOffset(f)
+    check(f:GetAlpha() == want and dx2 == 0 and dy2 == 0 and select(4, f:GetPoint(1)) == x0 and select(5, f:GetPoint(1)) == y0,
+        "it ends at its set alpha, back where it belongs")
+    check(Mo.driver.scripts.OnUpdate == nil, "with nothing moving, the driver runs nothing")
+
+    -- Turned round midway: from where it is, never a jump.
+    ns.Close()
+    pump(0.1)
+    local a = f:GetAlpha()
+    check(f:IsShown() and a > 0 and a < want, "closing fades out over time")
+    ns.Show("home")
+    check(f:IsShown() and math.abs(f:GetAlpha() - a) < 1e-9, "opened again mid-close, it goes on from the alpha it had")
+    pump(0.5)
+    check(f:IsShown() and f:GetAlpha() == want, "and the close's hide never comes")
+    ns.Show("home")
+    pump(0.5)
+    ns.Close()
+    pump(0.5)
+    ns.Show("home")
+    pump(0.1)
+    a = f:GetAlpha()
+    ns.Close()
+    check(math.abs(f:GetAlpha() - a) < 1e-9, "closed mid-open, it fades out from where it was")
+    pump(0.5)
+    check(not f:IsShown() and f:GetAlpha() == want, "then hides, with its alpha kept for the next open")
+
+    -- Escape: the game hides the stand-in, and that closes the window with its fade.
+    ns.Show("home")
+    pump(0.5)
+    f.motionEscape:Hide()
+    check(f:IsShown() and f.motionClosing, "Escape starts the close instead of hiding at once")
+    pump(0.5)
+    check(not f:IsShown() and not f.motionEscape:IsShown(), "and the window goes, its stand-in with it")
+
+    -- Moved by its own code midway (pinned, laid out): that is its new home.
+    ns.Show("home")
+    pump(0.1)
+    f:ClearAllPoints()
+    f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", 50, 500)
+    pump(0.5)
+    local p, _, rp, px, py = f:GetPoint(1)
+    check(p == "TOPLEFT" and rp == "BOTTOMLEFT" and px == 50 and py == 500, "re-anchored midway, it lands where it was put")
+    ns.ResetWindow()
+
+    -- Dragged midway: what was running ends at once, so nothing pulls it from under the mouse.
+    ns.Close()
+    pump(0.5)
+    ns.Show("home")
+    pump(0.05)
+    f.bar.scripts.OnDragStart(f.bar)
+    local sx, sy = Mo.CurrentOffset(f)
+    check(sx == 0 and sy == 0 and f:GetAlpha() == want and not Mo.IsMoving(f), "a drag settles the rise first")
+    f.bar.scripts.OnDragStop(f.bar)
+    slash("reset")
+
+    -- A fight starting still closes it at once.
+    pump(0.5)
+    fire("PLAYER_REGEN_DISABLED")
+    check(not f:IsShown() and f:GetAlpha() == want and not Mo.IsMoving(f), "a fight starting closes the window at once")
+    fire("PLAYER_REGEN_ENABLED")
+
+    -- Folding resizes smoothly.
+    ns.Show("home")
+    pump(0.5)
+    ns.Fold(true)
+    pump(0.1)
+    check(f:GetWidth() < 900 and f:GetWidth() > 360 and f.bar:GetWidth() == f:GetWidth(), "folding shrinks the window over time, its title bar along")
+    pump(0.5)
+    check(f:GetWidth() == 360, "and ends folded")
+    ns.Fold(false)
+    pump(0.5)
+    check(f:GetWidth() == 900, "unfolded, it is full width again")
+
+    -- Unseen news breathes until it is opened.
+    ns.db.general.newsUnseen = true
+    ns.Fold(false)
+    local g = f.news.motionPulse
+    check(g and g.looping == "BOUNCE" and f.news:GetAlpha() < 1, "an update not looked at yet pulses the What's new button")
+    ns.Show("news")
+    check(f.news:GetAlpha() == 1, "opening What's new stops the pulse")
+    pump(0.5)
+
+    -- One tween replacing another on the same channel; a failing callback stops nothing else.
+    local obj, firstDone = { v = 0 }, false
+    Mo.Tween(obj, "x", 0, 10, function(v) obj.v = v end, { dur = 0.2, done = function() firstDone = true end })
+    pump(0.1)
+    check(obj.v > 0 and obj.v < 10, "a tween goes through the values between")
+    Mo.Tween(obj, "x", obj.v, 0, function(v) obj.v = v end, { dur = 0.2 })
+    pump(0.5)
+    check(obj.v == 0 and not firstDone, "a new tween on the same channel replaces the old one, whose end never comes")
+    local good = { v = 0 }
+    Mo.Tween({}, "x", 0, 1, function() error("boom") end, { dur = 0.2 })
+    Mo.Tween(good, "x", 0, 1, function(v) good.v = v end, { dur = 0.2 })
+    pump(0.5)
+    check(good.v == 1 and Mo.driver.scripts.OnUpdate == nil, "one failing callback stops no other animation")
+
+    -- Rows lift in one after another; after MAX_STAGGER the rest come with the last of those.
+    local rows = {}
+    for i = 1, 8 do
+        rows[i] = CreateFrame("Frame", nil, UIParent)
+        rows[i]:SetPoint("TOPLEFT", 0, -i * 20)
+    end
+    Mo.Stagger(rows, 0)
+    pump(0.03, 0.01)
+    check(rows[1]:GetAlpha() > 0 and rows[5]:GetAlpha() == 0 and rows[8]:GetAlpha() == 0, "the first row is in before the fifth starts")
+    pump(0.1, 0.01)
+    check(rows[2]:GetAlpha() > rows[5]:GetAlpha() and rows[5]:GetAlpha() > 0 and rows[6]:GetAlpha() == rows[5]:GetAlpha()
+        and rows[8]:GetAlpha() == rows[5]:GetAlpha(), "rows past the fifth come with the fifth, so a long list never waits")
+    pump(0.5)
+    check(rows[8]:GetAlpha() == 1 and select(5, rows[8]:GetPoint(1)) == -160, "and every row ends in its place")
+    for _, r in ipairs(rows) do r:Hide() end
+
+    -- Counting from the last number.
+    local fs = UIParent:CreateFontString()
+    Mo.CountTo(fs, 100)
+    check(fs:GetText() == "100", "the first number is shown at once")
+    Mo.CountTo(fs, 200)
+    pump(0.2)
+    local n = tonumber(fs:GetText())
+    check(n and n > 100 and n < 200, "a new number counts up from the last one: " .. tostring(fs:GetText()))
+    pump(0.5)
+    check(fs:GetText() == "200", "and lands on it")
+
+    -- The light over the XP bar.
+    local bar = ns.pages.home.xp
+    bar:Sweep()
+    check(bar.light:IsShown() and bar.light:GetAlpha() == 0, "a sweep starts unseen at the bar's left end")
+    pump(0.3)
+    check(bar.light:GetAlpha() > 0, "then shows as it runs")
+    pump(1)
+    check(not bar.light:IsShown(), "and is gone at the end")
+
+    -- Notices: the new one rises in, the one already there glides down.
+    ns.Close()
+    for i = #ns.toasts, 1, -1 do table.remove(ns.toasts, i) end
+    ns.Toast("one")
+    pump(0.5)
+    local first = ns.toasts[1]
+    local _, _, _, _, before = first:GetPoint(1)
+    ns.Toast("two")
+    local second = ns.toasts[1]
+    check(select(5, first:GetPoint(1)) == before and second:GetAlpha() == 0, "a new notice starts unseen and the older one where it was")
+    pump(0.5)
+    check(select(5, first:GetPoint(1)) < before and second:GetAlpha() == 1, "then the older one is below, the new one in")
+    pump(20)
+
+    -- Off: every helper lands at once.
+    ns.db.general.motion = false
+    Mo.enabled = false
+    ns.Show("home")
+    check(f:GetAlpha() == want and not Mo.IsMoving(f), "with animations off the window opens at once")
+    ns.Close()
+    check(not f:IsShown(), "and closes at once")
+    ns.db.general.motion = true
+    Mo.enabled = true
 end
 
 say("--- Codex Forever, when it is installed")
@@ -3203,6 +3383,7 @@ store.point, store.x = "TOPLEFT", 5
 slash("reset")
 check(ns.db.window == store and store.point == nil and ZodUIFrame:GetPoint(1) == "CENTER", "/zod reset re-centres the window")
 ZodUI_OnCompartmentClick()
+pump(0.5)
 check(not ZodUIFrame:IsShown(), "the addon compartment entry toggles the window")
 ZodUI_Toggle()
 check(ZodUIFrame:IsShown() and type(BINDING_NAME_ZODUI_TOGGLE) == "string", "the key binding toggles the window")

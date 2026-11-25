@@ -3,7 +3,7 @@ local _, ns = ...
 -- Undead Route's frames: the widgets, the route window, the tracker and the arrow, and the map pin they set.
 -- The route's logic is Route.lua's (taken from ns.I); Core.lua wires these to the events and to /route.
 
-local I, T = ns.I, ns.T
+local I, T, M = ns.I, ns.T, ns.Motion
 local Print, Plain, Level, InLog, Complete, QuestName = I.Print, I.Plain, I.Level, I.InLog, I.Complete, I.QuestName
 local WaitsFor, RewardText, Dist, ClassTag, TaskKey, TaskState = I.WaitsFor, I.RewardText, I.Dist, I.ClassTag, I.TaskKey, I.TaskState
 local Status, Recommend, StepPlace, WorldPos, Here, ReadyToHandIn = I.Status, I.Recommend, I.StepPlace, I.WorldPos, I.Here, I.ReadyToHandIn
@@ -305,6 +305,7 @@ local function ScaleGrip(frame, store, min, max)
     end)
     g:SetScript("OnMouseDown", function(self, mouse)
         if mouse ~= "LeftButton" then return end
+        M.Settle(frame) -- sized from where it really is, not from midway through its rise
         local left = frame:GetLeft()
         if not left then return end
         self.tex:SetTexture(GRIP .. "Down")
@@ -336,7 +337,10 @@ local function MakeMovable(frame, store)
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
     frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStart", function(self)
+        M.Settle(self) -- a rise still running would pull it back from under the mouse
+        self:StartMoving()
+    end)
     frame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         SavePosition(self, store)
@@ -755,7 +759,7 @@ local function BuildMain()
     f:SetScale(db.window.scale or 1)
     RestorePosition(f, db.window, "CENTER", 0, 0)
     f.grip = ScaleGrip(f, db.window, 0.6, 1.6)
-    tinsert(UISpecialFrames, "UndeadRouteFrame") -- Escape closes it
+    M.WireEscape(f) -- Escape closes it, with its fade
 
     f.title = T.Text(f, "GameFontNormal", T.GOLD)
     f.title:SetPoint("TOPLEFT", 12, -8)
@@ -763,7 +767,7 @@ local function BuildMain()
     f.sub = T.Text(f, "GameFontHighlightSmall", T.DIM)
     f.sub:SetPoint("LEFT", f.title, "RIGHT", 10, 0)
     f.sub:SetText((ns.Faction or "Horde") .. " 1-60, WoW Forever")
-    local close = T.Close(f, function() f:Hide() end)
+    local close = T.Close(f, function() M.Close(f) end)
     close:SetPoint("TOPRIGHT", -4, -4)
 
     -- The recommendation banner, with the 1-60 progress bar along its foot.
@@ -814,6 +818,7 @@ local function BuildMain()
     track:SetPoint("BOTTOMLEFT", 1, 1)
     track:SetPoint("BOTTOMRIGHT", -1, 1)
     track:SetHeight(4)
+    f.track, f.banner = track, banner
     f.fill = banner:CreateTexture(nil, "OVERLAY")
     f.fill:SetTexture(T.WHITE)
     f.fill:SetVertexColor(T.GOLD[1], T.GOLD[2], T.GOLD[3])
@@ -1140,6 +1145,17 @@ local function RefreshMain()
     if open[1] then more[#more + 1] = string.format(ClassTag() .. " %s.", open[1].quest.name) end
     f.bannerSub2:SetText(table.concat(more, "  "))
     f.fill:SetWidth(math.max(1, f.fillWidth * math.min(1, (level - 1) / 59)))
+    if f.drawnLevel and level > f.drawnLevel then -- a level gained: a light runs along the bar
+        if not f.light then
+            f.light = f.banner:CreateTexture(nil, "OVERLAY", nil, 7)
+            f.light:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark") -- soft-edged, so it needs no mask
+            f.light:SetBlendMode("ADD")
+            f.light:SetSize(32, 16)
+            f.light:Hide()
+        end
+        M.Sweep(f.light, f.track, { alpha = 0.9, dur = 0.6 })
+    end
+    f.drawnLevel = level
 
     -- Stage list.
     for i, stage in ipairs(ns.Stages) do
@@ -1652,13 +1668,15 @@ function ns.UpdateArrow()
         end
     end
     local key = t and (t.key or t.title)
-    if key ~= arrowKey then
+    local moved = key ~= arrowKey
+    if moved then
         arrowKey = key
         arrowTarget = t
         if ns.OnArrowTarget then ns.OnArrowTarget(t) end -- the tests listen here
     end
     if not arrowFrame and t then BuildArrow() end
     if arrowFrame then arrowFrame:SetShown(t ~= nil) end
+    if moved and t and arrowFrame then M.Pop(arrowFrame, 1.2) end -- a new target: it says so with a small pop
 end
 local UpdateArrow = ns.UpdateArrow
 
@@ -1686,8 +1704,8 @@ end
 
 function ns.Toggle()
     if not main then BuildMain() end
-    if main:IsShown() then
-        main:Hide()
+    if M.IsOpen(main) then
+        M.Close(main)
     else
         -- The stage you picked yourself, when there is one; otherwise where the route wants you now.
         local picked
@@ -1695,9 +1713,10 @@ function ns.Toggle()
             if db.window.stage and stage.key == db.window.stage then picked = stage end
         end
         selected = picked or Recommend()
-        main:Show()
+        M.Open(main)
         RevealSelected()
         Refresh()
+        M.Stagger(main.rows, 0.04) -- the stage list lifts in after the window
     end
 end
 

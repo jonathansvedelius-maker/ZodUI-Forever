@@ -498,6 +498,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
         db.minimap = db.minimap or {}
         db.reminded = db.reminded or {}
         db.turnedIn = db.turnedIn or {}
+        ns.Motion.enabled = db.motion ~= false
         for _, take in ipairs(ns.onDB) do take(db) end -- Route.lua and Window.lua work on it too
     elseif event == "PLAYER_LOGIN" then
         T.Adopt() -- ZodUI's look, when it is installed
@@ -684,6 +685,10 @@ SlashCmdList["UNDEADROUTE"] = function(msg)
         end
     elseif msg == "paladin" or msg == "class" then
         Print("the class quests follow your class: open " .. CLASS.name .. " class quests in /route.")
+    elseif msg == "motion" then
+        db.motion = (db.motion == false) and true or false
+        ns.Motion.enabled = db.motion
+        Print("animations " .. (db.motion and "on: the windows rise in, the rows lift in" or "off: everything is at once where it ends up") .. ".")
     elseif msg == "arrow" then
         db.arrow = (db.arrow == false) and true or false
         Refresh()
@@ -702,7 +707,7 @@ SlashCmdList["UNDEADROUTE"] = function(msg)
         end
     elseif msg == "help" then
         Print("/route opens the window. /route guide opens the new step-by-step guide. /route dungeons ranks the dungeons worth doing now. /route do <name> pauses the route for one, /route follow <zone> does the same for a side branch, /route back ends it. "
-            .. "/route tracker shows or hides the small panel. /route minimap hides or shows the minimap button. /route record says what the quest recorder has kept (off/on pauses it). /route data says where the quest list comes from. /route arrow turns the arrow to the next step on or off (drag it to move it). "
+            .. "/route tracker shows or hides the small panel. /route minimap hides or shows the minimap button. /route record says what the quest recorder has kept (off/on pauses it). /route data says where the quest list comes from. /route arrow turns the arrow to the next step on or off (drag it to move it). /route motion turns the animations on or off. "
             .. "/route font 0 to 6 sets the text size. "
             .. "/route reset clears your ticks and reminders. "
             .. "In the window: the NOW box lists the batch of quests to carry together (pick up, do, hand in); "

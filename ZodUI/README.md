@@ -74,7 +74,7 @@ With Undead Route installed, Home shows the stage the route wants you on and the
 
 ## Look and sharing
 
-Under **Settings > General**: an accent colour (gold, your class colour or one of five others), the window's size, whether the window closes when a fight starts, and whether alerts show as ZodUI's own notices or as the game's red error text, and whether they are read aloud with the game's text to speech. The search box above the module list finds a setting by any word in its name.
+Under **Settings > General**: an accent colour (gold, your class colour or one of five others), the window's size, whether the window closes when a fight starts, whether windows, rows and numbers animate (Animations), and whether alerts show as ZodUI's own notices or as the game's red error text, and whether they are read aloud with the game's text to speech. The search box above the module list finds a setting by any word in its name.
 
 The search box in the title bar (or `/zod find linen`) looks through everything at once: pages, settings, items, to-dos, reminders, goals and characters. Click a result to go there.
 

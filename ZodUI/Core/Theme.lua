@@ -501,36 +501,10 @@ function T.Check(parent, label, width, onChange)
 end
 
 -- Fades `frame` to alpha `to` over `secs`, from wherever it is now, so a fade that turns round midway
--- never jumps. The game runs the animation itself (an AnimationGroup), no Lua each frame. `done` runs when
--- it ends; a fade cut short by a newer one drops its `done` (a fade-out that hides is cancelled by a fade-in).
+-- never jumps (ns.Motion runs it). `done` runs when it ends; a fade cut short by a newer one drops its `done`
+-- (a fade-out that hides is cancelled by a fade-in).
 function T.Fade(frame, to, secs, done)
-    if not frame.CreateAnimationGroup then
-        frame:SetAlpha(to)
-        if done then done() end
-        return
-    end
-    local ag = frame.zodFade
-    if not ag then
-        ag = frame:CreateAnimationGroup()
-        ag.alpha = ag:CreateAnimation("Alpha")
-        if ag.alpha.SetSmoothing then ag.alpha:SetSmoothing("OUT") end
-        if ag.SetToFinalAlpha then ag:SetToFinalAlpha(true) end
-        ag:SetScript("OnFinished", function(self)
-            frame:SetAlpha(self.to)
-            local fn = self.done
-            self.done = nil
-            if fn then fn() end
-        end)
-        frame.zodFade = ag
-    end
-    local from = frame:GetAlpha() -- read before Stop: mid-fade this is the alpha on screen
-    ag.done = nil
-    ag:Stop()
-    ag.to, ag.done = to, done
-    ag.alpha:SetFromAlpha(from)
-    ag.alpha:SetToAlpha(to)
-    ag.alpha:SetDuration(math.max(0.01, secs))
-    ag:Play()
+    ns.Motion.Fade(frame, to, { dur = math.max(0.01, secs), done = done })
 end
 
 -- Shows `frame` fading in to `to` (default 1); a frame already on screen just fades from where it is.
@@ -681,6 +655,17 @@ function T.Bar(parent, width, height, color)
             self.extra:Hide()
         end
     end
+    -- A soft light runs once along the bar (a level gained, say).
+    function bar:Sweep()
+        if not self.light then
+            self.light = self:CreateTexture(nil, "OVERLAY")
+            self.light:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark") -- soft-edged, so it needs no mask
+            self.light:SetBlendMode("ADD")
+            self.light:SetSize(36, height * 2)
+            self.light:Hide()
+        end
+        ns.Motion.Sweep(self.light, self, { alpha = 0.9, inset = 4, dur = 0.6 })
+    end
     bar:Set(0)
     return bar
 end
@@ -689,6 +674,7 @@ end
 --   columns: { { title, width, justify } ... }
 --   :SetRows({ { cell, cell, ..., data = any } ... })
 --   .onClick(data) makes the rows clickable; .selected (a data value) is highlighted.
+T.tables = {}
 function T.Table(parent, columns, width, height, rowHeight, noSort)
     local ROW = rowHeight or 20
     -- The columns must end inside the table, clear of the scroll thumb: 8 px in from the left, 6 px between
@@ -705,6 +691,7 @@ function T.Table(parent, columns, width, height, rowHeight, noSort)
     local tbl = T.Panel(parent, T.PANEL)
     tbl:SetSize(width, height)
     tbl.rows = {}
+    T.tables[#T.tables + 1] = tbl -- for the window, whose rows lift in when their page opens
     tbl.columns = columns -- as laid out (the last one maybe narrowed)
 
     local function Cells(owner, font, color)
@@ -932,6 +919,7 @@ function T.Movable(frame, store, handle, needShift)
     handle:RegisterForDrag("LeftButton")
     handle:SetScript("OnDragStart", function()
         if needShift and not (IsShiftKeyDown and IsShiftKeyDown()) then return end
+        ns.Motion.Settle(frame) -- a rise still running would pull it back from under the mouse
         frame:StartMoving()
     end)
     handle:SetScript("OnDragStop", function()
@@ -986,6 +974,7 @@ function T.ScaleGrip(frame, opts)
     end)
     g:SetScript("OnMouseDown", function(self, mouse)
         if mouse ~= "LeftButton" then return end
+        ns.Motion.Settle(frame) -- sized from where it really is, not from midway through a rise or a resize
         local left = frame:GetLeft()
         if not left then return end
         self.tex:SetTexture(GRIP .. "Down")

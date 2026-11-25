@@ -34,6 +34,13 @@ for (const file of files) {
 }
 if (bad) process.exit(1);
 
+// Motion.lua ships in both addons (neither needs the other), so the two copies must stay the same file.
+const twin = path.join(addonDir, "..", "UndeadRoute", "Motion.lua");
+if (fs.existsSync(twin) && fs.readFileSync(twin, "utf8") !== fs.readFileSync(path.join(addonDir, "Core", "Motion.lua"), "utf8")) {
+    console.log("Core/Motion.lua and UndeadRoute/Motion.lua differ: copy the changed one over the other.");
+    process.exit(1);
+}
+
 const L = lauxlib.luaL_newstate();
 lualib.luaL_openlibs(L);
 

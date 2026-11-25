@@ -2,7 +2,7 @@
 ## Title: |cffffd100Zod|rUI
 ## Notes: A companion suite for WoW Forever: session and XP stats, loot log, loot rolls, gold ledger, characters, reputation, vendor, info bar, tooltips, chat, alerts and a to-do list. Type /zod.
 ## Author: Jonathan
-## Version: 0.66.0
+## Version: 0.67.0
 ## OptionalDeps: UndeadRoute, ForeverLevelingBiS, NaowhForever, NaowhForever_BiS, ForeverDungeonJournal, CodexForever
 ## SavedVariables: ZodUIDB
 ## SavedVariablesPerCharacter: ZodUICharDB
@@ -11,6 +11,7 @@
 ## X-Preview-Start: /zod
 
 Core\Init.lua
+Core\Motion.lua
 Core\Theme.lua
 Core\Codex.lua
 Core\Weights.lua
