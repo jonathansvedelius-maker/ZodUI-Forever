@@ -33,13 +33,15 @@ To share them: send that file to whoever builds the addon, who puts it in `recor
 ## Commands
 
 `/route` opens the route. `/route tracker`, `/route minimap` and `/route arrow` show or hide the tracker, the minimap
-button and the arrow. `/route record` and `/route data` are above. `/route help` lists the rest.
+button and the arrow. `/route record` and `/route data` are above. `/route motion` turns the animations off or on. `/route help` lists the rest.
 
 ## Development
 
-The addon's own code is three files, loaded in this order: `Route.lua` (the stage list and the route's logic, no
-frames), `Window.lua` (the window, the tracker, the arrow) and `Core.lua` (reminders, the minimap button, events and
-`/route`). They share no locals: the later two take what they use from `ns.I`.
+The addon's own code is loaded in this order: `Motion.lua` (how windows and rows animate), `Route.lua` (the stage
+list and the route's logic, no frames), `Window.lua` (the window, the tracker, the arrow), `Guide.lua` (the
+step-by-step guide) and `Core.lua` (reminders, the minimap button, events and `/route`). They share no locals: the
+later ones take what they use from `ns.I` and `ns.Motion`. `Motion.lua` is the same file as ZodUI's
+`Core/Motion.lua`; ZodUI's `tools/run.js` fails when the two differ.
 
 `node tools/run.js .` runs the tests against a stub of the WoW API. They use `Generated.lua`, a local copy of the quest
 list built by `node tools/lua.js tools/gen.lua "<WoW>/_forever_/Interface/AddOns" Generated.lua` from the addons

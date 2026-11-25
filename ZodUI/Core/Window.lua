@@ -1,5 +1,6 @@
 local ADDON, ns = ...
 local T = ns.T
+local M = ns.Motion
 
 -- The ZodUI window: page names down the left, the chosen page on the right.
 -- A page is { key, title, order, Build(page, frame), Refresh(page, arg) } and is
@@ -164,6 +165,18 @@ local function FoldedLines()
     return lines
 end
 
+-- Sets a size; on screen the window gets there smoothly (ns.Motion), hidden it is set at once.
+local function Resize(frame, w, h)
+    if frame:IsShown() then
+        M.Size(frame, w, h)
+        return
+    end
+    M.Stop(frame, "size")
+    frame.motionW, frame.motionH = nil, nil
+    if w then frame:SetWidth(w) end
+    if h then frame:SetHeight(h) end
+end
+
 local function RefreshFolded()
     local lines, short = FoldedLines(), main.short
     for i, row in ipairs(short.rows) do
@@ -175,7 +188,7 @@ local function RefreshFolded()
         end
     end
     short.none:SetShown(#lines == 0)
-    main:SetHeight(TITLE_H + 8 + math.max(1, #lines) * FOLD_ROW + 6 + 14 + 8)
+    Resize(main, nil, TITLE_H + 8 + math.max(1, #lines) * FOLD_ROW + 6 + 14 + 8)
 end
 
 local function ApplyFold()
@@ -184,6 +197,7 @@ local function ApplyFold()
     local unseen = ns.db.general.newsUnseen
     main.news.label:SetText(unseen and "What's new *" or "What's new")
     if unseen then main.news.label:SetTextColor(T.GOLD[1], T.GOLD[2], T.GOLD[3]) else local c = T.ButtonText() main.news.label:SetTextColor(c[1], c[2], c[3]) end
+    M.Pulse(main.news, unseen and not folded, 0.55, 1, 1.6) -- breathes until it is opened
     main.fold.label:SetText(folded and "+" or "-")
     main.fold.tipTitle = folded and "Unfold" or "Fold"
     main.fold.tip = folded and "Show the whole window again." or "Fold the window to what wants doing now. A double-click on the title bar does the same."
@@ -193,9 +207,9 @@ local function ApplyFold()
     main.content:SetShown(not folded)
     main.short:SetShown(folded)
     local w = folded and FOLD_W or WIDTH
-    main:SetWidth(w)
-    main.bar:SetWidth(w)
-    if folded then RefreshFolded() else main:SetHeight(HEIGHT) end
+    Resize(main, w, not folded and HEIGHT or nil)
+    Resize(main.bar, w, nil) -- the same length and curve, so the title bar keeps to the window's edge
+    if folded then RefreshFolded() end
 end
 
 local function RefreshNow(arg)
@@ -229,8 +243,23 @@ ns.Every(1, function() -- the pages show clocks and rates, so an open window is 
     if main and main:IsShown() then dirty = true end
 end)
 
-local function Select(key, arg)
+-- What lifts in when a page opens: Home's cards, else the rows of the page's tables.
+local function Pieces(page)
+    if page.cards then return page.cards end
+    local list = {}
+    for _, tbl in ipairs(T.tables) do
+        local p = tbl
+        while p and p ~= page.frame do p = p:GetParent() end
+        if p then
+            for _, row in ipairs(tbl.rows) do list[#list + 1] = row end
+        end
+    end
+    return list
+end
+
+local function Select(key, arg, opening)
     local page = ns.pages[key] or ns.pages.home
+    local same = page == current and not opening -- search results typed on, say
     if current and current.frame then current.frame:Hide() end
     current = page
     if page.key ~= "find" then
@@ -251,6 +280,8 @@ local function Select(key, arg)
         b.label:SetTextColor(c[1], c[2], c[3])
     end
     RefreshNow(arg)
+    -- Only here, on a change of page: the redraw every second must never lift the rows in again.
+    if not same then M.Stagger(Pieces(page), 0.04) end
 end
 
 local function Build()
@@ -262,7 +293,7 @@ local function Build()
     f:SetAlpha((ns.db.general.alpha or 100) / 100)
     f:EnableMouse(true)
     f:Hide()
-    tinsert(UISpecialFrames, "ZodUIFrame") -- Escape closes it
+    M.WireEscape(f, function() ns.Close() end) -- Escape closes it, with its fade
 
     local bar = CreateFrame("Frame", nil, f, "BackdropTemplate")
     bar:SetPoint("TOPLEFT", 0, 0)
@@ -460,6 +491,7 @@ function ns.Fold(on)
     ns.db.window.folded = on and true or nil
     if not main then return end
     local store = ns.db.window
+    M.Settle(main) -- pinned where it really is, not midway through its rise
     local point, rel, x, y = T.PinTop(main)
     if point then store.point, store.rel, store.x, store.y = point, rel, x, y end
     ApplyFold()
@@ -479,19 +511,20 @@ function ns.Show(key, arg)
         ns.db.general.newsUnseen = nil
         ApplyFold()
     end
-    T.FadeIn(main, 0.15, (ns.db.general.alpha or 100) / 100)
+    local opening = not M.IsOpen(main)
+    M.Open(main, (ns.db.general.alpha or 100) / 100)
     local general = ns.db.general
     local last = general.remember and general.lastPage and ns.pages[general.lastPage] and general.lastPage or nil
-    Select(key or (current and current.key) or last or "home", arg)
+    Select(key or (current and current.key) or last or "home", arg, opening)
 end
 
--- Closes the window with a short fade. Escape and a fight starting still close it at once.
+-- Closes the window: it fades and sinks a little. A fight starting still closes it at once.
 function ns.Close()
-    if main then T.FadeOut(main, 0.12, (ns.db.general.alpha or 100) / 100) end
+    if main then M.Close(main, nil, (ns.db.general.alpha or 100) / 100) end
 end
 
 function ns.Toggle()
-    if main and main:IsShown() and not (main.zodFade and main.zodFade.to == 0) then
+    if main and M.IsOpen(main) then
         ns.Close()
     else
         ns.Show()
@@ -526,7 +559,7 @@ end
 
 -- A fight starts: the window gets out of the way.
 ns.On("PLAYER_REGEN_DISABLED", function()
-    if ns.db and ns.db.general.combatClose and main and main:IsShown() then main:Hide() end
+    if ns.db and ns.db.general.combatClose and main and main:IsShown() then M.Hide(main, (ns.db.general.alpha or 100) / 100) end
 end)
 
 function ns.ResetWindow()
@@ -710,6 +743,8 @@ ns.AddPage({
     Refresh = function(page)
         local char = ns.char
         local level = ns.Level() or char.level or 1
+        if page.level and level > page.level and main:IsShown() then page.xp:Sweep() end -- a level up while you look
+        page.level = level
         page.name:SetText("|c" .. ns.ClassHex(char.class) .. (char.name or "?") .. "|r  |cffffffffLevel " .. level .. "|r")
         local zone, sub = GetRealZoneText and GetRealZoneText() or "", GetSubZoneText and GetSubZoneText() or ""
         local where = (sub ~= "" and sub ~= zone) and (sub .. ", " .. zone) or zone
@@ -792,6 +827,7 @@ local general = {
         { type = "check", key = "remember", label = "Open the window on the page I had open last" },
         { type = "check", key = "nextUp", label = "A Next up card on Home with what wants doing now" },
         { type = "check", key = "combatClose", label = "Close the window when a fight starts" },
+        { type = "check", key = "motion", label = "Animations: windows rise in, rows lift in, numbers count", tip = "Off: everything is at once where it ends up." },
         { type = "check", key = "hideOff", label = "Leave the pages of modules that are off out of the list" },
         { type = "check", key = "toasts", label = "Show alerts as ZodUI notices (off: the game's red error text)" },
         { type = "step", key = "toastHold", label = "How long a notice stays", min = 2, max = 15, step = 1, format = function(v) return v .. " s" end },
@@ -815,6 +851,7 @@ local general = {
         if key == "font" then T.ApplyFont() end
         if key == "minimap" and ns.UpdateMinimap then ns.UpdateMinimap() end
         if key == "scale" or key == "alpha" then ns.ApplyScale() end
+        if key == "motion" then ns.Motion.enabled = ns.db.general.motion and true or false end
     end,
 }
 

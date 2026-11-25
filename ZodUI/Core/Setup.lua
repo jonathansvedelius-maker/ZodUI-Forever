@@ -63,6 +63,9 @@ ns.AddPage({
 
 -- Newest first. One line per thing a player would notice.
 ns.NEWS = {
+    { "0.67.0", {
+        "Smoother: the window fades in rising a little and sinks away when it closes (Escape too), a page's rows lift in one after another, folding resizes the window smoothly, notices rise in and the older ones glide down, and the gold total counts up. Settings > General > Animations turns it all off.",
+    } },
     { "0.66.0", {
         "New: Object glow. A pillar of light rises from quest objects (gold) and chests (blue) near you, so you don't walk past them, with a sound the first time. Off until you switch it on; /zod spotter test lights up any object to try the look.",
     } },

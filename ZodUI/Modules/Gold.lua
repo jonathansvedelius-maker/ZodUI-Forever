@@ -198,7 +198,8 @@ ns.AddPage({
             page.from:SetRows(rows, "Where your gold comes from and goes is sorted here from now on.")
         end
 
-        page.total:SetText("|cffffd100All characters:|r  " .. ns.Money(M:Total()))
+        -- Counts to a new total from the last one (the first is set at once; the same one again changes nothing).
+        ns.Motion.CountTo(page.total, M:Total(), function(v) return "|cffffd100All characters:|r  " .. ns.Money(v) end)
         local week, played, bestKey, best = 0, 0, nil, nil
         local from = ns.Today(6)
         for key, d in pairs(ns.db.gold.days) do

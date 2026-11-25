@@ -549,7 +549,7 @@ end
 -- The gear's menu: the switches the classic window keeps in its bottom bar.
 local function BuildSettings(f)
     local m = CreateFrame("Frame", nil, f)
-    m:SetSize(210, 5 * 26 + 16)
+    m:SetSize(210, 6 * 26 + 16)
     m:SetPoint("TOPRIGHT", f.gear, "BOTTOMRIGHT", 0, -4)
     m:SetFrameStrata("DIALOG")
     m.fill = Tex(m, "panel_fill", "BACKGROUND")
@@ -572,6 +572,7 @@ local function BuildSettings(f)
             db.guide.theme = THEMES[at % #THEMES + 1].key
             ns.RebuildGuide()
         end },
+        { function() return db.motion ~= false and "Animations: on" or "Animations: off" end, function() SlashCmdList.UNDEADROUTE("motion") end },
         { function() return "Classic window" end, function() f:Hide() ns.Toggle() end },
     }
     for i, item in ipairs(items) do
@@ -614,13 +615,16 @@ local function Build()
     f:EnableMouse(true)
     f:SetClampedToScreen(true)
     f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStart", function(self)
+        ns.Motion.Settle(self) -- a rise still running would pull it back from under the mouse
+        self:StartMoving()
+    end)
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         local point, _, rel, x, y = self:GetPoint(1)
         db.guide.point, db.guide.rel, db.guide.x, db.guide.y = point, rel, x, y
     end)
-    tinsert(UISpecialFrames, "UndeadRouteGuide")
+    ns.Motion.WireEscape(f) -- Escape closes it, with its fade
 
     -- The window: its fill, the header's art, then the gold frame over the edges.
     f.fill = Tex(f, "panel_fill", "BACKGROUND")
@@ -929,8 +933,8 @@ function ns.GuideShown() return guide ~= nil and guide:IsShown() end
 function ns.ToggleGuide()
     Refresh = I.Refresh
     if not guide then Build() end
-    if guide:IsShown() then
-        guide:Hide()
+    if ns.Motion.IsOpen(guide) then
+        ns.Motion.Close(guide)
         return
     end
     shownStage = nil
@@ -941,7 +945,7 @@ function ns.ToggleGuide()
     end
     if not shownStage then db.guide.follow = true end
     guide.lastActive = nil
-    guide:Show()
+    ns.Motion.Open(guide)
     Refresh()
 end
 

@@ -42,7 +42,7 @@ local function Set(list)
     return s
 end
 
-local REGION = "SetPoint ClearAllPoints SetAllPoints GetPoint SetSize SetWidth SetHeight GetWidth GetHeight Show Hide SetShown IsShown "
+local REGION = "SetPoint ClearAllPoints SetAllPoints GetPoint GetNumPoints SetSize SetWidth SetHeight GetWidth GetHeight Show Hide SetShown IsShown "
     .. "IsVisible GetParent SetAlpha GetAlpha IsMouseOver GetCenter GetLeft GetTop "
 local FRAME = REGION .. "SetScript GetScript HookScript RegisterEvent UnregisterEvent CreateFontString CreateTexture SetFrameStrata SetFrameLevel GetFrameLevel "
     .. "EnableMouse IsMouseEnabled EnableMouseWheel SetMovable SetClampedToScreen RegisterForDrag StartMoving StopMovingOrSizing GetEffectiveScale "
@@ -168,6 +168,10 @@ function M:SetPoint(point, a, b, c, d)
 end
 function M:ClearAllPoints() self.points = {} end
 function M:SetAllPoints(rel) self.points = { { "ALL", rel } } end
+function M:GetNumPoints() -- SetAllPoints is two anchors in the game
+    if self.points[1] and self.points[1][1] == "ALL" then return 2 end
+    return #self.points
+end
 function M:GetPoint(i)
     local p = self.points[i or 1]
     if p then return p[1], p[2], p[3], p[4], p[5] end
@@ -229,6 +233,8 @@ function M:CreateAnimationGroup()
         function a:SetFromAlpha(v) self.from = v end
         function a:SetToAlpha(v) self.to = v end
         function a:SetSmoothing(s) self.smoothing = s end
+        function a:SetScaleFrom(x, y) self.scaleFrom = { x, y } end
+        function a:SetScaleTo(x, y) self.scaleTo = { x, y } end
         self.anims[#self.anims + 1] = a
         return a
     end

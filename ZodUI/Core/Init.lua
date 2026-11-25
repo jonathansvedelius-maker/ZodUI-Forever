@@ -10,7 +10,7 @@ local ADDON, ns = ...
 -- guarded, and what went wrong is kept for /zod errors.
 
 ZodUI = ns
-ns.version = "0.66.0"
+ns.version = "0.67.0"
 ns.modules = {} -- by key
 ns.order = {} -- in load order, which is the order Settings lists them
 ns.errors = {}
@@ -448,7 +448,8 @@ local function Fill(dst, src)
 end
 
 local GENERAL = { font = 1, minimap = true, minimapAngle = 215, welcome = true, accent = "gold", look = "game", scale = 100, combatClose = true,
-    toasts = true, greet = true, hideOff = true, remember = true, alpha = 100, toastHold = 5, toastSound = false, nextUp = true, speak = false }
+    toasts = true, greet = true, hideOff = true, remember = true, alpha = 100, toastHold = 5, toastSound = false, nextUp = true, speak = false,
+    motion = true }
 
 local function LoadData()
     ZodUIDB = ZodUIDB or {}
@@ -522,6 +523,7 @@ local function Login()
     ns.char = char
 
     local held, because = {}, {}
+    ns.Motion.enabled = ns.db.general.motion and true or false -- before the modules start: they may animate
     for _, m in ipairs(ns.order) do Start(m, held, because) end
     ns.ready = true
     if ns.db.general.welcome then
