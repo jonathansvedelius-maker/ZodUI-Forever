@@ -613,7 +613,7 @@ local function BuildStages()
         for _, q in ipairs(list) do if q.items then itemsOf[q.id] = q.items end end
     end
     for _, d in ipairs(ns.Dungeons or {}) do
-        local quests, real = {}, 0
+        local quests, real, notes = {}, 0, {}
         for _, q in ipairs(d.quests) do
             if Eligible(q) then
                 if owner[q.id] == d.name then
@@ -624,11 +624,12 @@ local function BuildStages()
                     for _, item in ipairs(itemsOf[q.id] or {}) do
                         if item[2]:find(d.name, 1, true) and not item[2]:find("^Reward") then bring = item[1] end
                     end
-                    quests[#quests + 1] = { t = string.format("%s: %s here (the quest is listed under %s).", q.name,
+                    notes[#notes + 1] = { t = string.format("%s: %s here (the quest is listed under %s).", q.name,
                         bring and ("bring back the " .. bring .. " from") or "part of it is", owner[q.id]) }
                 end
             end
         end
+        for _, note in ipairs(notes) do quests[#quests + 1] = note end -- after the quests, which run as one batch
         local stage = byName[d.name]
         if stage then
             -- The generated quests replace the hand-written quest steps; the tips stay.

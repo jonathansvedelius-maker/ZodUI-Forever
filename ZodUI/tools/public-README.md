@@ -11,7 +11,7 @@ Two addons for WoW Forever:
 2. Packa upp båda i `World of Warcraft\_forever_\Interface\AddOns\`.
    Du ska få mapparna `AddOns\ZodUI` och `AddOns\UndeadRoute`, alltså inte `AddOns\ZodUI-0.64.0\ZodUI`.
 3. Installera de här addonen också:
-   - **Behövs för Undead Route:** NaowhForever med Dungeon Journal, Discovery och Journeys. Rutten läser sin uppdragslista ur dem.
+   - **Behövs för Undead Route:** [ForeverDB](https://www.curseforge.com/wow/addons/forever-db). Rutten läser sin uppdragslista ur den.
    - **Rekommenderas:** ForeverDungeonJournal, för dungeon-kartorna i ZodUI och dungeon-belöningarna i rutten.
    - **Valfritt:** Forever Leveling BiS (ZodUI:s Hand-me-downs och uppgraderingar i Loot shout) och Codex Forever (Alt-klick på föremål).
 4. Starta spelet. Klicka på **AddOns** vid karaktärsvalet och kolla att allt är påslaget.
@@ -21,7 +21,7 @@ Two addons for WoW Forever:
 
 ## Install (English)
 
-Download both zips from **[Releases](../../releases/latest)** and unpack them into `World of Warcraft\_forever_\Interface\AddOns\`, so you get `AddOns\ZodUI` and `AddOns\UndeadRoute`. Undead Route needs NaowhForever (with Dungeon Journal, Discovery and Journeys); ForeverDungeonJournal is recommended; Forever Leveling BiS and Codex Forever are optional. In the game: `/zod`, `/route`, and `/route data` to check the quest list was found.
+Download both zips from **[Releases](../../releases/latest)** and unpack them into `World of Warcraft\_forever_\Interface\AddOns\`, so you get `AddOns\ZodUI` and `AddOns\UndeadRoute`. Undead Route needs [ForeverDB](https://www.curseforge.com/wow/addons/forever-db); ForeverDungeonJournal is recommended; Forever Leveling BiS and Codex Forever are optional. In the game: `/zod`, `/route`, and `/route data` to check the quest list was found.
 
 ## Help the route
 

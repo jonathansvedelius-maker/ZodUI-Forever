@@ -12,11 +12,11 @@ Undead Route ships no quest data of other addons. At login it builds its quest l
 
 | Addon | Needed for |
 |---|---|
-| NaowhForever, with its Dungeon Journal, Discovery and Journeys parts | The quest list itself: every quest, its giver, where it is handed in, who can take it |
+| [ForeverDB](https://www.curseforge.com/wow/addons/forever-db) | The quest list itself: every quest, its giver, where it is handed in, who can take it |
 | ForeverDungeonJournal (recommended) | Dungeon quest rewards, and the objectives of class quest chains |
 | ZodUI (optional) | Its look, and its record of quests you handed in |
 
-Without NaowhForever the route still names the zones and hubs, and says at login which addons are missing.
+Without ForeverDB the route still names the zones and hubs, and says at login which addons are missing.
 `/route data` lists them, each marked on or missing.
 
 ## The quest recorder
@@ -45,4 +45,6 @@ later ones take what they use from `ns.I` and `ns.Motion`. `Motion.lua` is the s
 
 `node tools/run.js .` runs the tests against a stub of the WoW API. They use `Generated.lua`, a local copy of the quest
 list built by `node tools/lua.js tools/gen.lua "<WoW>/_forever_/Interface/AddOns" Generated.lua` from the addons
-installed on that machine; it is never shipped or committed. `node tools/icon.js` draws the icon and the arrow.
+installed on that machine (ForeverDB is needed, the others are read when they are there); it is never shipped or
+committed. The test of the ForeverDB reader uses real rows copied into `tools/foreverdb-sample.lua`.
+`node tools/icon.js` draws the icon and the arrow.

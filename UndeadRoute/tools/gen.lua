@@ -3,36 +3,32 @@
 -- Generated.lua is never shipped: it is not in the .toc and git ignores it. It adds ForeverLevelingBiS's reward items,
 -- which the game takes from the quest recorder instead. Run: node tools/lua.js tools/gen.lua <AddOns folder> Generated.lua
 -- Sources:
---   NaowhForever_DungeonJournal  every dungeon quest (id, level, side, where to pick it up)
---   NaowhForever_DiscoveryData   every quest (class and race limits, giver, prerequisites)
---   NaowhForever_JourneysData    where each quest is handed in
---   ForeverLevelingBiS           quest reward items and their quality
---   ForeverDungeonJournal        objectives and required items of class quest chains
+--   ForeverDB                    every quest: class and race limits, giver, prerequisites, hand-in, objectives (needed)
+--   ForeverLevelingBiS           quest reward items and their quality                                           (optional)
+--   ForeverDungeonJournal        objectives and required items of class quest chains                            (optional)
 -- Quests of both factions and every race and class are kept, each tagged with who may take it
 -- (side, race and class masks); Route.lua keeps this character's at login.
 local root, out = arg[1], arg[2]
 
-local function auto() -- a table whose missing fields are tables too
-    return setmetatable({}, { __index = function(t, k) local v = auto() rawset(t, k, v) return v end })
+-- ForeverDB's files, in its .toc's order, fill _G.ForeverDB.
+local toc = assert(readfile(root .. "/ForeverDB/ForeverDB.toc"), "ForeverDB is not installed in " .. root)
+for file in toc:gmatch("[^\r\n]+") do
+    if file:match("^[%w_]+%.lua$") then assert(load(assert(readfile(root .. "/ForeverDB/" .. file)), file))() end
 end
+print("ForeverDB " .. tostring(ForeverDB.meta and ForeverDB.meta.build))
 
--- Naowh's files read _G.NaowhForever.
-NaowhForever = { Journal = {}, CompletoQuestData = {} }
-assert(load(readfile(root .. "/NaowhForever_DungeonJournal/Data/Quests.lua")))()
-assert(load(readfile(root .. "/NaowhForever_DiscoveryData/Quests.lua")))()
-assert(load(readfile(root .. "/NaowhForever_JourneysData/QuestSpots.lua")))()
-local J, D, Spots = NaowhForever.Journal, NaowhForever.CompletoQuestData, NaowhForever.JourneyQuestSpots
-
-local flb = { language = {} }
+local flb = { language = {}, Quests = {}, Items = {} }
 for _, f in ipairs({ "Quests.lua", "Items.lua", "Tables.lua", "Zones.lua" }) do
-    assert(load(readfile(root .. "/ForeverLevelingBiS/Data/" .. f)))("x", flb)
+    local text = readfile(root .. "/ForeverLevelingBiS/Data/" .. f)
+    if text then assert(load(text))("x", flb) else print("ForeverLevelingBiS: no " .. f .. ", left out") end
 end
 
 -- QuestUpdates.lua is a run of "-- BEGIN name ... -- END name" blocks, each a do-block. Each block is
 -- loaded on its own, so one that needs the game (frames, events) loses only itself. Only FDJ's
 -- fields are made up on the fly; any other missing global is an error, which skips that block.
 local FDJ = setmetatable({}, { __index = function(t, k) local v = {} rawset(t, k, v) return v end }) -- one level deep only
-local fdjText = readfile(root .. "/ForeverDungeonJournal/Data/QuestUpdates.lua")
+local fdjText = readfile(root .. "/ForeverDungeonJournal/Data/QuestUpdates.lua") or ""
+if fdjText == "" then print("ForeverDungeonJournal: not installed, left out") end
 local env = setmetatable({ FDJ = FDJ, ForeverDungeonJournal = FDJ }, { __index = _G })
 local fdjOk, fdjBad, pos = 0, {}, 1
 local head = fdjText:find("\n%-%- BEGIN ") or #fdjText
@@ -64,12 +60,21 @@ local addon = out:gsub("[^/\\]*$", "")
 local ns = {}
 assert(load(readfile(addon .. "Data.lua"), "Data.lua"))("x", ns)
 assert(load(readfile(addon .. "Build.lua"), "Build.lua"))("x", ns)
+if not next(flb.Quests) then Rewards = ns.ForeverDBRewards(ForeverDB) print("rewards: ForeverDB's") end
+local t0 = os.clock()
+local J, D, Spots, own = ns.FromForeverDB(ForeverDB, ns.Stages)
+for id, det in pairs(Details) do own[id] = det end -- ForeverDungeonJournal's win where it has a quest
+Details = own
+print(string.format("ForeverDB read in %.1f s", os.clock() - t0))
 local dungeons, classQuests, zoneQuests, needLimit, log, mapOrder = ns.BuildQuests({
     J = J, D = D, Spots = Spots, Details = Details, Rewards = Rewards, chains = flb.QuestChains,
 }, ns.Stages)
 for _, line in ipairs(log) do print(line) end
 local mapName = {}
 for _, z in ipairs(D.Zones) do mapName[z.map] = z.name end
+local empty = {}
+for _, map in ipairs(mapOrder) do if not zoneQuests[map] or #zoneQuests[map] == 0 then empty[#empty + 1] = map end end
+assert(#empty == 0, "route maps with no quests: " .. table.concat(empty, ", "))
 
 ---------------------------------------------------------------------------
 -- Serialising

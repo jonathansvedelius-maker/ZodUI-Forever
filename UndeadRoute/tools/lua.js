@@ -9,8 +9,9 @@ process.argv.slice(3).forEach((a, i) => {
     lua.lua_rawseti(L, -2, i + 1);
 });
 lua.lua_setglobal(L, to_luastring("arg"));
-lua.lua_pushcfunction(L, (S) => {
-    lua.lua_pushstring(S, fs.readFileSync(to_jsstring(lua.lua_tostring(S, 1))));
+lua.lua_pushcfunction(L, (S) => { // nil when the file is not there
+    const file = to_jsstring(lua.lua_tostring(S, 1));
+    if (fs.existsSync(file)) lua.lua_pushstring(S, fs.readFileSync(file)); else lua.lua_pushnil(S);
     return 1;
 });
 lua.lua_setglobal(L, to_luastring("readfile"));
